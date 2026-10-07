@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laboratorio di gravitazione</title>
+<meta name="description" content="Laboratorio interattivo di gravitazione universale: stelle, pianeti, buchi neri, onde gravitazionali, supernove e l'evoluzione dell'universo dal Big Bang.">
+<link rel="stylesheet" href="css/stile.css">
+</head>
+<body>
+<header class="barra">
+  <div class="marchio">
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><circle cx="16" cy="16" r="5" fill="#ffd27a"/><ellipse cx="16" cy="16" rx="13" ry="6" fill="none" stroke="#8fb4ff" stroke-width="1.6" transform="rotate(-25 16 16)"/><circle cx="27" cy="11" r="2.4" fill="#6fd0ff"/></svg>
+    <span>Laboratorio di gravitazione</span>
+  </div>
+  <nav class="interruttore" id="gSezione" aria-label="Sezione">
+    <button data-v="lab" class="attivo">Gravità</button>
+    <button data-v="universo">Universo dal Big Bang</button>
+  </nav>
+  <div class="gruppo solo-lab">
+    <button id="bScenari" class="primario">Scenari</button>
+    <div class="interruttore" id="gModo" title="Fisica classica (Newton) o relativistica (Einstein)">
+      <button data-v="classica" class="attivo">Classica</button>
+      <button data-v="relativistica">Relativistica</button>
+    </div>
+    <div class="interruttore" id="gVista" title="Vista dall'alto o tridimensionale">
+      <button data-v="2d" class="attivo">2D</button>
+      <button data-v="3d">3D</button>
+    </div>
+  </div>
+  <div class="gruppo destra">
+    <button id="bScheda" title="Scheda storica dell'evento" hidden>Scheda storica</button>
+    <button id="bDiario" class="solo-lab" title="Diario degli eventi">Diario</button>
+    <button id="bEsperimenti" class="solo-lab" title="Salva e carica i tuoi esperimenti">Esperimenti</button>
+    <button id="bOpzioni" class="solo-lab">Opzioni</button>
+    <button id="bTema" title="Tema chiaro o scuro dei pannelli" aria-label="Cambia tema">◐</button>
+    <button id="bAiuto" title="Guida">?</button>
+  </div>
+</header>
+
+<main id="lab" class="sezione">
+  <canvas id="cielo" aria-label="Spazio della simulazione"></canvas>
+
+  <aside id="strumenti" class="pannello">
+    <div class="testa"><h2>Strumenti</h2><button class="chiudi-pannello" aria-label="Riduci">–</button></div>
+    <div class="corpo">
+      <div class="interruttore largo" id="gStrumento">
+        <button data-v="seleziona" class="attivo" title="Seleziona, sposta i corpi, trascina la freccia verde per cambiare la velocità (tasto S)">Seleziona</button>
+        <button data-v="aggiungi" title="Clicca per posare un corpo, trascina per lanciarlo (tasto A)">Aggiungi / lancia</button>
+      </div>
+      <div id="tavolozza" class="tavolozza"></div>
+      <label class="spunta"><input type="checkbox" id="cCircolare" checked> Clic semplice: orbita circolare</label>
+      <label class="spunta"><input type="checkbox" id="cRelativa" checked> Velocità relativa al corpo più vicino</label>
+      <label id="lIncl" class="cursore" hidden>Inclinazione del lancio <output id="oIncl">0°</output>
+        <input type="range" id="rIncl" min="-80" max="80" value="0"></label>
+      <p id="pSugg" class="suggerimento"></p>
+    </div>
+  </aside>
+
+  <aside id="proprieta" class="pannello" hidden></aside>
+
+  <section id="grafico" class="pannello">
+    <div class="testa">
+      <div class="interruttore piccolo" id="gGrafico">
+        <button data-v="energia" class="attivo">Energia</button>
+        <button data-v="onde">Onde gravitazionali</button>
+      </div>
+      <button class="chiudi-pannello" aria-label="Riduci">–</button>
+    </div>
+    <div class="corpo">
+      <canvas id="cGrafico" width="300" height="130"></canvas>
+      <p id="gNota" class="nota"></p>
+    </div>
+  </section>
+
+  <div class="console" id="console">
+    <button id="bPlay" class="tondo" title="Avvia / pausa (barra spaziatrice)" aria-label="Avvia o metti in pausa">❚❚</button>
+    <button id="bPasso" title="Avanza di un passo" aria-label="Un passo">⏭</button>
+    <button id="bRipristina" title="Torna alla situazione dell'ultimo avvio" aria-label="Ripristina">↺</button>
+    <label class="vel">Velocità
+      <input type="range" id="rVel" min="0" max="10" value="5">
+      <output id="oVel"></output>
+    </label>
+    <span id="oTempo" class="tempo">t = 0</span>
+    <span id="oRallentato" class="avviso-lento" hidden title="Il computer non riesce a calcolare abbastanza in fretta: la simulazione va più piano di quanto indicato">rallentato</span>
+  </div>
+
+  <div id="avvisi" aria-live="polite"></div>
+</main>
+
+<main id="universo" class="sezione" hidden></main>
+
+<dialog id="dScenari" class="finestra larga">
+  <div class="testa"><h2>Scenari pronti</h2><button class="chiudi" aria-label="Chiudi">✕</button></div>
+  <p class="nota">Ogni scenario si può modificare liberamente: seleziona i corpi, cambia massa e velocità, aggiungine altri.</p>
+  <div id="listaScenari"></div>
+</dialog>
+
+<dialog id="dOpzioni" class="finestra">
+  <div class="testa"><h2>Opzioni</h2><button class="chiudi" aria-label="Chiudi">✕</button></div>
+  <div id="listaOpzioni" class="opzioni"></div>
+</dialog>
+
+<dialog id="dEsperimenti" class="finestra">
+  <div class="testa"><h2>I miei esperimenti</h2><button class="chiudi" aria-label="Chiudi">✕</button></div>
+  <div class="riga">
+    <input type="text" id="tNomeEsp" placeholder="Nome dell'esperimento" maxlength="60">
+    <button id="bSalvaEsp" class="primario">Salva</button>
+  </div>
+  <ul id="listaEsp" class="lista"></ul>
+  <div class="riga">
+    <button id="bEsporta">Scarica come file</button>
+    <label class="bottone">Apri un file… <input type="file" id="fImporta" accept=".json,application/json" hidden></label>
+  </div>
+  <p class="nota">Gli esperimenti salvati restano in questo browser. Per portarli su un altro computer usa "Scarica come file".</p>
+</dialog>
+
+<dialog id="dScheda" class="finestra larga">
+  <div class="testa"><h2 id="schedaTitolo">Scheda storica</h2><button class="chiudi" aria-label="Chiudi">✕</button></div>
+  <div id="schedaCorpo" class="scheda"></div>
+  <div class="riga"><button id="bSchedaVia" class="primario">Avvia la simulazione</button></div>
+</dialog>
+
+<dialog id="dDiario" class="finestra">
+  <div class="testa"><h2>Diario degli eventi</h2><button class="chiudi" aria-label="Chiudi">✕</button></div>
+  <ul id="listaDiario" class="lista diario"></ul>
+</dialog>
+
+<dialog id="dAiuto" class="finestra larga">
+  <div class="testa"><h2>Come si usa</h2><button class="chiudi" aria-label="Chiudi">✕</button></div>
+  <div class="guida">
+    <h3>Comandi</h3>
+    <ul>
+      <li><b>Aggiungi / lancia</b>: scegli un corpo nella tavolozza. Un clic lo posa (in orbita circolare attorno al corpo più vicino, se l'opzione è attiva); se invece trascini, lo lanci: la freccia indica direzione e velocità e la linea tratteggiata mostra la traiettoria prevista (verde = orbita chiusa, arancio = si allontana per sempre, rossa = urto).</li>
+      <li><b>Seleziona</b>: clicca un corpo per vederne e cambiarne le proprietà. Trascinalo per spostarlo; trascina il pallino verde per cambiarne la velocità.</li>
+      <li><b>Vista</b>: rotellina per lo zoom; trascina lo spazio vuoto per spostarti (in 3D per ruotare; con il tasto destro per spostarti). Su tablet: due dita per lo zoom.</li>
+      <li><b>Tastiera</b>: barra spaziatrice = pausa, S = seleziona, A = aggiungi, F = segui il corpo selezionato, Canc = elimina, + e − = velocità.</li>
+      <li><b>↺ Ripristina</b> riporta tutto a com'era l'ultima volta che hai premuto Avvia: puoi provare e riprovare.</li>
+    </ul>
+    <h3>Classica o relativistica?</h3>
+    <p>In modalità <b>classica</b> vale la legge di gravitazione di Newton: F = G·m₁·m₂/r². In modalità <b>relativistica</b> si aggiungono gli effetti principali della relatività generale di Einstein: le orbite strette ruotano lentamente (precessione), le coppie di corpi compatti perdono energia in onde gravitazionali e si avvicinano a spirale, la luce delle stelle viene deviata dai buchi neri (lente gravitazionale). Nelle Opzioni si può "rallentare la luce" per rendere visibili effetti che in natura sono minuscoli.</p>
+    <h3>Le dimensioni</h3>
+    <p>Lo spazio è quasi vuoto: alla scala del Sistema solare i pianeti sarebbero puntini invisibili. Per questo i corpi sono disegnati con una grandezza minima. Gli urti però avvengono solo quando i corpi si toccano davvero (con le dimensioni reali). Nelle Opzioni puoi scegliere di vedere le dimensioni reali.</p>
+    <h3>Massa, raggio e densità</h3>
+    <p>Sono legati: densità = massa / volume. Cambiando la massa puoi tenere fissa la densità (cambia il raggio) oppure il raggio (cambia la densità). Se un corpo diventa più piccolo del suo raggio di Schwarzschild (2GM/c²) diventa un buco nero.</p>
+    <h3>Unità di misura</h3>
+    <p>M☉ = massa del Sole (1,99 × 10³⁰ kg), M⊕ = massa della Terra, M♃ = massa di Giove; R☉ e R⊕ sono i raggi del Sole e della Terra; UA = unità astronomica, la distanza media Terra–Sole (circa 150 milioni di km); c = velocità della luce.</p>
+  </div>
+</dialog>
+
+<script src="js/unita.js"></script>
+<script src="js/corpi.js"></script>
+<script src="js/fisica.js"></script>
+<script src="js/scenari.js"></script>
+<script src="js/vista.js"></script>
+<script src="js/interfaccia.js"></script>
+<script src="js/universo.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
