@@ -4,7 +4,8 @@
   const { G, U } = Grav;
 
   // luce: brilla di luce propria; compatto: oggetto degenere; piccolo: tenuto insieme dalla
-  // rigidità del materiale (non viene distrutto dalle maree); fluido: per il limite di Roche
+  // rigidità del materiale (non viene distrutto dalle maree); fluido: per il limite di Roche;
+  // albedo: frazione di luce riflessa (per la temperatura prevista); elastico: rimbalza invece di fondersi
   const TIPI = {
     stella:    { nome: 'Stella', m: U.MS, r: U.RS, colore: '#ffe08a', luce: 1, fluido: 1, minPx: 7,
                  info: 'Sfera di gas caldo che produce energia con la fusione nucleare.' },
@@ -16,21 +17,24 @@
                  info: 'Resto di una supernova: più del Sole in una sfera di 12 km. Oltre circa 2,3 M☉ collassa in buco nero.' },
     buco:      { nome: 'Buco nero', m: 10 * U.MS, r: 0, colore: '#000000', compatto: 1, minPx: 6,
                  info: 'Nulla, nemmeno la luce, sfugge dall\'orizzonte degli eventi. Il raggio è quello di Schwarzschild: 2GM/c².' },
-    gassoso:   { nome: 'Gigante gassoso', m: U.MG, r: U.RG, colore: '#d8a26a', fluido: 1, minPx: 6,
+    gassoso:   { nome: 'Gigante gassoso', m: U.MG, r: U.RG, colore: '#d8a26a', fluido: 1, minPx: 6, albedo: 0.34,
                  info: 'Pianeta fatto soprattutto di idrogeno ed elio, come Giove.' },
-    roccioso:  { nome: 'Pianeta roccioso', m: U.MT, r: U.RT, colore: '#4c8fdc', minPx: 4.5,
+    roccioso:  { nome: 'Pianeta roccioso', m: U.MT, r: U.RT, colore: '#4c8fdc', minPx: 4.5, albedo: 0.3,
                  info: 'Pianeta di roccia e metallo, come la Terra.' },
-    luna:      { nome: 'Luna', m: U.ML, r: U.RL, colore: '#c4c0b8', minPx: 3.5,
+    luna:      { nome: 'Luna', m: U.ML, r: U.RL, colore: '#c4c0b8', minPx: 3.5, albedo: 0.12,
                  info: 'Satellite naturale.' },
-    asteroide: { nome: 'Asteroide', m: 1e15, r: 5e3, colore: '#a08f7a', piccolo: 1, minPx: 2.5,
+    asteroide: { nome: 'Asteroide', m: 1e15, r: 5e3, colore: '#a08f7a', piccolo: 1, minPx: 2.5, albedo: 0.1,
                  info: 'Piccolo corpo roccioso.' },
-    cometa:    { nome: 'Cometa', m: 2e13, r: 2e3, colore: '#c9f1ff', piccolo: 1, minPx: 2.5,
+    cometa:    { nome: 'Cometa', m: 2e13, r: 2e3, colore: '#c9f1ff', piccolo: 1, minPx: 2.5, albedo: 0.04,
                  info: 'Blocco di ghiaccio e polvere: vicino a una stella sviluppa la coda, che punta sempre lontano dalla stella.' },
-    satellite: { nome: 'Satellite artificiale', m: 1000, r: 10, colore: '#f2f2f2', piccolo: 1, minPx: 2.5,
+    satellite: { nome: 'Satellite artificiale', m: 1000, r: 10, colore: '#f2f2f2', piccolo: 1, minPx: 2.5, albedo: 0.5,
                  info: 'Oggetto costruito dall\'uomo: la sua massa non influisce sugli altri corpi.' },
+    // densità di un vero pallone da basket (0,6 kg in una sfera di 12 cm di raggio) con il raggio della Terra
+    pallone:   { nome: 'Pallone da basket gigante', m: 9e22, r: U.RT, colore: '#e8742c', piccolo: 1, elastico: 1, minPx: 5, albedo: 0.3,
+                 info: 'Pura fantasia: un pallone da basket grande come la Terra. È pieno d\'aria, quindi leggerissimo (stessa densità di un pallone vero, circa 0,08 g/cm³). Sui corpi solidi rimbalza con un urto perfettamente elastico (un pallone vero perde un po\' di energia a ogni rimbalzo); stelle, giganti gassosi e buchi neri invece lo inghiottono. In questo gioco le maree non lo distruggono.' },
     galassia:  { nome: 'Nucleo di galassia', m: 1e11 * U.MS, r: 1e19, colore: '#fff1d0', luce: 1, piccolo: 1, minPx: 6, interno: 1,
                  info: 'Centro di una galassia: rappresenta la massa di stelle, gas e materia oscura.' },
-    frammento: { nome: 'Frammento', m: 1e20, r: 2e5, colore: '#bbbbbb', piccolo: 1, minPx: 2.5, interno: 1,
+    frammento: { nome: 'Frammento', m: 1e20, r: 2e5, colore: '#bbbbbb', piccolo: 1, minPx: 2.5, interno: 1, albedo: 0.2,
                  info: 'Pezzo nato da un urto o da una distruzione mareale.' }
   };
 
@@ -59,6 +63,19 @@
     raggioNana: m => 0.0126 * U.RS * Math.cbrt(0.6 * U.MS / m),
     luce: b => b.luce != null ? b.luce : !!TIPI[b.tipo].luce,
     compatto: b => !!TIPI[b.tipo].compatto,
+
+    // Luminosità stimata in watt. Stelle: relazione massa-luminosità della sequenza principale; gli altri
+    // corpi luminosi: temperatura tipica della superficie e raggio (L = 4πR²σT⁴); galassie: 1 L☉ ogni 10 M☉.
+    luminosita(b) {
+      const m = b.m / U.MS, daT = T => 4 * Math.PI * b.r * b.r * U.SIGMA * T ** 4;
+      switch (b.tipo) {
+        case 'gigante': return daT(3800);
+        case 'nana': return daT(1e4);
+        case 'neutroni': return daT(1e6);
+        case 'galassia': return U.LS * m / 10;
+      }
+      return U.LS * (m < 0.43 ? 0.23 * m ** 2.3 : m < 2 ? m ** 4 : m < 55 ? 1.4 * m ** 3.5 : 32000 * m);
+    },
 
     crea(tipo, p = {}) {
       const T = TIPI[tipo];

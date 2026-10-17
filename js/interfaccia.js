@@ -289,6 +289,31 @@
   }
 
   function riga(t, v) { return el('tr', {}, el('td', { testo: t }), el('td', { testo: v })); }
+  const nota = t => el('tr', {}, el('td.nota', { colSpan: 2, testo: t }));
+  const intero = x => Math.round(x).toLocaleString('it-IT').replace('-', '−');
+  const gradi = T => T >= 1e4 ? fmt.numero(T) + ' K' : T < 1 ? fmt.numero(T) + ' K (quasi zero assoluto)' : `${intero(T - 273.15)} °C (${intero(T)} K)`;
+
+  // Righe della temperatura prevista (vedi S.temperatura): ogni stima dichiara le sue semplificazioni
+  function righeTemperatura(b) {
+    const t = S.temperatura(b), lum = L => riga('Luminosità', fmt.numero(L / U.LS) === '1' ? 'come il Sole' : fmt.numero(L / U.LS) + ' volte il Sole');
+    if (t.tipo === 'hawking') return [riga('Temperatura (di Hawking)', gradi(t.T)),
+      nota('Secondo la teoria di Hawking un buco nero emette un debolissimo calore: più è massiccio, più è freddo. Non è mai stato misurato.')];
+    if (t.tipo === 'galassia') return [lum(t.L)];
+    if (t.tipo === 'superficie') return [riga('Temperatura della superficie', gradi(t.T)), lum(t.L), nota({
+      gigante: 'Valore tipico di una gigante rossa (circa 3800 K).',
+      nana: 'Valore tipico (circa 10 000 K): una nana bianca si raffredda lentamente in miliardi di anni.',
+      neutroni: 'Valore tipico di una stella di neutroni giovane (circa un milione di gradi): brilla soprattutto nei raggi X.'
+    }[b.tipo] || 'Stima dalla massa (relazione massa-luminosità delle stelle "normali") e dal raggio: L = 4πR²σT⁴.')];
+    const righe = [riga('Temperatura media prevista', gradi(t.T))];
+    if (!t.sorgente) return righe.concat(nota('Nessuna stella: resta solo il debole calore del fondo cosmico a microonde (2,7 K, cioè −270 °C).'));
+    if (b.tipo !== 'gassoso') righe.push(riga('Massima (stella allo zenit)', gradi(t.Tmax)));
+    let testo = `Stima: equilibrio tra la luce ricevuta da ${t.sorgenti > 1 ? 'tutte le stelle (soprattutto ' + t.sorgente.nome + ')' : t.sorgente.nome} e il calore irraggiato nello spazio. `
+      + `Riflette il ${Math.round(t.albedo * 100)}% della luce (albedo); niente atmosfera né calore interno.`;
+    if (b.tipo === 'roccioso') testo += ' Per la Terra si ottengono circa −18 °C: grazie all\'effetto serra la media vera è circa +15 °C.';
+    else if (b.tipo === 'gassoso') testo += ' I giganti gassosi hanno anche calore interno: Giove emette quasi il doppio dell\'energia che riceve dal Sole.';
+    else testo += ' La massima vale per un corpo senza atmosfera, nel punto illuminato a picco (sulla Luna circa +120 °C).';
+    return righe.concat(nota(testo));
+  }
 
   function aggiornaPannello(forza) {
     if (!pann) return;
@@ -328,6 +353,7 @@
       righe.push(riga('Gravità in superficie', `${fmt.numero(g)} m/s² (${fmt.numero(g / 9.81)} volte la Terra)`),
         riga('Velocità di fuga dalla superficie', fmt.velocita(Math.sqrt(2 * G * b.m / b.r))));
     }
+    righe.push(...righeTemperatura(b));
     righe.push(riga('Raggio di Schwarzschild', fmt.lunghezza(2 * G * b.m / Grav.C ** 2)));
     pann.dati.replaceChildren(...righe);
     aggiornaFase(b, d);

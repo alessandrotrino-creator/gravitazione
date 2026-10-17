@@ -270,6 +270,9 @@
       return;
     }
 
+    // il pallone rimbalza sui corpi solidi; stelle, giganti gassosi e oggetti compatti lo inghiottono
+    if (ha('pallone') && SOLIDI.includes(a.tipo === 'pallone' ? b.tipo : a.tipo)) { rimbalzo(a, b); return; }
+
     if (entrambi('neutroni')) {
       const perdita = rel ? 0.01 : 0, ej = Math.min(0.03 * U.MS, 0.02 * M);
       unisci(big, small, perdita);
@@ -351,6 +354,39 @@
       ev({ titolo: st.titolo, testo: `${st.testo} Velocità d'impatto ${fmt.velocita(vrel)}, energia liberata circa ${fmt.numero(Eimp)} J (${fmt.numero(Eimp / 4.184e15)} megatoni di tritolo).`, effetti: [LAMPO('#ffe2b0', 150, 2.2), ANELLO('#ff9a4c', 220, 2)], scossa: 0.8, sopravvissuto: big.id });
     } else if (small.m > 1e-6 * big.m || st) ev({ titolo, testo, effetti: [LAMPO('#ffd59a', 30 + 140 * forza, 0.8 + 1.5 * forza)], scossa: forza * 0.8, sopravvissuto: big.id });
     else ev({ effetti: [LAMPO('#ffd59a', 18, 0.5)], sopravvissuto: big.id });
+  }
+
+  // Urto elastico: si conservano quantità di moto ed energia cinetica, i corpi non si fondono.
+  // Cambia solo la componente della velocità lungo la congiungente dei centri (sfere lisce, senza rotazione).
+  const SOLIDI = ['pallone', 'roccioso', 'luna', 'asteroide', 'cometa', 'satellite', 'frammento'];
+  function rimbalzo(a, b) {
+    let nx = b.x - a.x, ny = b.y - a.y, nz = b.z - a.z;
+    const r = Math.hypot(nx, ny, nz) || 1; nx /= r; ny /= r; nz /= r;
+    const wa = a.fisso ? 0 : 1 / a.m, wb = b.fisso ? 0 : 1 / b.m, w = wa + wb;   // un corpo fisso ha massa "infinita"
+    if (!w) return;
+    const R = a.r + b.r, sov = R - r;                 // separa i corpi compenetrati durante il passo
+    let dU = 0;
+    if (sov > 0) {
+      const ka = sov * wa / w, kb = sov * wb / w;
+      a.x -= nx * ka; a.y -= ny * ka; a.z -= nz * ka;
+      b.x += nx * kb; b.y += ny * kb; b.z += nz * kb;
+      dU = G * a.m * b.m * (R * R - r * r) / (2 * R * R * R);  // energia potenziale guadagnata (dentro vale la forza di una sfera uniforme)
+    }
+    const u = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny + (a.vz - b.vz) * nz;   // velocità di avvicinamento
+    if (u <= 0) return;                              // si stanno già allontanando
+    const us = Math.sqrt(Math.max(0, u * u - 2 * dU * w));   // velocità di allontanamento: l'energia totale non cambia
+    const J = (u + us) / w;
+    a.vx -= J * wa * nx; a.vy -= J * wa * ny; a.vz -= J * wa * nz;
+    b.vx += J * wb * nx; b.vy += J * wb * ny; b.vz += J * wb * nz;
+    if (u < 0.02 * Math.sqrt(2 * G * (a.m + b.m) / (a.r + b.r))) return;       // tocco leggero: niente effetti
+    const p = a.tipo === 'pallone' ? a : b, o = p === a ? b : a, ora = performance.now();
+    const e = { x: a.x + nx * a.r, y: a.y + ny * a.r, z: a.z + nz * a.r, effetti: [ANELLO('#ff9a3c', 60, 0.8), LAMPO('#ffd2a0', 25, 0.5)], scossa: 0.15, sopravvissuto: p.id };
+    if (ora - (p._avvisato || 0) > 8000) {           // un solo avviso ogni tanto, non uno per rimbalzo
+      p._avvisato = ora;
+      e.titolo = 'Boing! Rimbalzo elastico';
+      e.testo = `${p.nome} rimbalza su ${o.nome} a ${fmt.velocita(u)}. In un urto elastico si conservano sia la quantità di moto sia l'energia cinetica: nessuna energia diventa calore e i corpi non si fondono.`;
+    }
+    evento(e);
   }
 
   function frammenta(big, small, vfuga) {
@@ -504,6 +540,32 @@
       }
     }
     return { K: Kin, U: Pot };
+  };
+
+  // Temperatura prevista. Corpi luminosi: temperatura della superficie (dalla luminosità e dal raggio);
+  // buchi neri: temperatura di Hawking; gli altri: equilibrio tra la luce assorbita da tutte le sorgenti
+  // e il calore irraggiato da tutta la superficie (corpo nero, senza atmosfera né calore interno).
+  S.temperatura = function (b) {
+    const { SIGMA, T_CMB } = U;
+    if (b.tipo === 'buco') return { tipo: 'hawking', T: 6.17e-8 * U.MS / b.m };
+    if (K.luce(b)) {
+      const L = K.luminosita(b);
+      return b.tipo === 'galassia' ? { tipo: 'galassia', L } : { tipo: 'superficie', L, T: Math.pow(L / (4 * Math.PI * b.r * b.r * SIGMA), 0.25) };
+    }
+    let flusso = 0, fmax = 0, n = 0, sorgente = null;
+    for (const o of S.corpi) {
+      if (o === b || !K.luce(o)) continue;
+      const d2 = Math.max((o.x - b.x) ** 2 + (o.y - b.y) ** 2 + (o.z - b.z) ** 2, (o.r + b.r) ** 2);
+      const f = K.luminosita(o) / (4 * Math.PI * d2);         // W/m² che arrivano al corpo
+      flusso += f; n++;
+      if (f > fmax) { fmax = f; sorgente = o; }
+    }
+    const A = TIPI[b.tipo].albedo != null ? TIPI[b.tipo].albedo : 0.3, ass = (1 - A) * flusso;
+    return {
+      tipo: 'equilibrio', albedo: A, flusso, sorgente, sorgenti: n,
+      T: Math.pow(ass / (4 * SIGMA) + T_CMB ** 4, 0.25),       // media su tutta la superficie
+      Tmax: Math.pow(ass / SIGMA + T_CMB ** 4, 0.25)           // nel punto con la stella allo zenit
+    };
   };
 
   // Sfera di Hill: la regione in cui un corpo "comanda" sui satelliti nonostante l'attrazione del suo primario

@@ -326,7 +326,26 @@
     const g = ctx.createRadialGradient(x + lx * rc * 0.45, y + ly * rc * 0.45, rc * 0.05, x, y, rc * 1.15);
     g.addColorStop(0, mescola(b.colore, '#ffffff', 0.35)); g.addColorStop(0.55, b.colore); g.addColorStop(1, mescola(b.colore, '#000000', sorg ? 0.8 : 0.4));
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rc, 0, 7); ctx.fill();
+    if (b.tipo === 'pallone') disegnaCuciture(ctx, b, x, y, rc);
     if (b.anelli) disegnaAnelli(ctx, b, x, y, rc, k, 'davanti');
+  }
+
+  // Le linee nere del pallone da basket: due diametri a croce e due archi laterali
+  function disegnaCuciture(ctx, b, x, y, rc) {
+    if (rc < 4) return;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x, y, rc, 0, 7); ctx.clip();
+    ctx.translate(x, y); ctx.rotate(b.id * 0.7);
+    ctx.strokeStyle = 'rgba(25,12,5,0.85)'; ctx.lineWidth = Math.max(1, rc * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(-rc, 0); ctx.lineTo(rc, 0); ctx.moveTo(0, -rc); ctx.lineTo(0, rc);
+    for (const s of [-1, 1]) {
+      const cx = 1.3 * rc * s, R = 1.05 * rc, a0 = s < 0 ? -1.2 : Math.PI + 1.2;
+      ctx.moveTo(cx + R * Math.cos(a0), R * Math.sin(a0));
+      ctx.arc(cx, 0, R, a0, s < 0 ? 1.2 : Math.PI - 1.2, s > 0);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   function disegnaBuco(ctx, b, x, y, rc, k) {

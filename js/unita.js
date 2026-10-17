@@ -4,7 +4,8 @@
   'use strict';
   const G = 6.674e-11, C = 2.99792458e8;
   const U = {
-    MS: 1.98847e30, RS: 6.957e8,      // Sole
+    MS: 1.98847e30, RS: 6.957e8, LS: 3.828e26,   // Sole (luminosità in W)
+    SIGMA: 5.670374e-8, T_CMB: 2.725,  // costante di Stefan-Boltzmann, fondo cosmico a microonde (K)
     MT: 5.9722e24, RT: 6.371e6,       // Terra
     ML: 7.342e22, RL: 1.7374e6,       // Luna
     MG: 1.89813e27, RG: 6.9911e7,     // Giove

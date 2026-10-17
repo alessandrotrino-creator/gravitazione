@@ -21,6 +21,9 @@ con doppio clic (`file://`), quindi niente `fetch`, moduli ES o CDN.
   6GM/c² si fondono. Urti/fusioni (`urto`), frammentazione, distruzione mareale (limite di Roche), supernove,
   nebulose planetarie, collassi (`verifica`), attrito dinamico tra galassie. Il "corpo dominante" usa la
   sfera di Hill (`aggiornaHill`, `dominante`). Gli eventi vanno in `sim.eventi` e li consuma l'interfaccia.
+  Il "pallone da basket gigante" (`elastico`) rimbalza sui corpi `SOLIDI` con un urto elastico (`rimbalzo`, che
+  conserva anche l'energia quando separa i corpi compenetrati). `temperatura(b)`: superficie per i corpi luminosi
+  (luminosità da `corpi.luminosita`), Hawking per i buchi neri, equilibrio radiativo (albedo del tipo) per gli altri.
 - `js/scenari.js`: scenari pronti (`SCENARI`), schede storiche (`SCHEDE`: quando, dove, chi, cronologia),
   azioni programmate (`programma`), testi d'impatto dedicati (proprietà `storia` dei corpi).
 - `js/vista.js`: disegno 2D (dall'alto) e 3D (prospettiva su canvas, "telo elastico"), scie, effetti.
