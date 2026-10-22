@@ -219,6 +219,10 @@ dialog .chiudi { border: 0; background: none; font-size: 16px; }
 .uni-epoca { right: 12px; top: 12px; width: 330px; }
 .uni-epoca h3 { margin: 2px 0 4px; font-size: 17px; }
 .uni-epoca p { margin: 4px 0; font-size: 13.5px; }
+.uni-legenda { display: flex; flex-wrap: wrap; gap: 3px 12px; font-size: 12px; margin-top: 8px; color: var(--testo-tenue); }
+.uni-legenda:empty { display: none; }
+.uni-legenda span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.uni-legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; flex: none; }
 .uni-dati { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12.5px; margin-top: 8px; }
 .uni-dati span:nth-child(odd) { color: var(--testo-tenue); }
 .uni-dati span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }

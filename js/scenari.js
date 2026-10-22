@@ -99,7 +99,7 @@
     },
     {
       id: 'fasi', gruppo: 'Sistema solare', nome: 'Sole, Terra e Luna: le fasi',
-      descrizione: 'La vista segue la Terra; la Luna le gira intorno in circa 27 giorni. Nel pannello della Luna vedi la sua fase come appare dalla Terra: nuova, crescente, primo quarto, piena… Il Sole è fuori dallo schermo, nella direzione della freccia gialla. Le scie sono disegnate rispetto al corpo dominante.',
+      descrizione: 'La vista segue la Terra; la Luna le gira intorno in circa 27 giorni (mese siderale), ma le fasi si ripetono ogni 29,5 giorni (mese sinodico), perché nel frattempo la Terra si è spostata attorno al Sole. Nel pannello della Luna vedi la sua fase come appare dalla Terra: nuova, crescente, primo quarto, piena… Il Sole è fuori dallo schermo, nella direzione della freccia gialla. Le scie sono disegnate rispetto al corpo dominante.',
       velocita: U.GIORNO, camera: { ampiezza: 1.3e9, segui: 'Terra' }, opz: { scieRelative: true }, seleziona: 'Luna',
       costruisci() {
         const sole = K.crea('stella', { nome: 'Sole', colore: '#ffe08a' });
@@ -121,7 +121,7 @@
     },
     {
       id: 'fionda', gruppo: 'Sistema solare', nome: 'La fionda gravitazionale',
-      descrizione: 'Una sonda passa dietro a Giove, che si muove a 13 km/s. Nel riferimento di Giove la sonda entra ed esce con la stessa velocità, ma rispetto al Sole ne guadagna moltissima: guarda la velocità nel pannello prima e dopo il passaggio (da 10 a circa 26 km/s). Così hanno viaggiato le sonde Voyager.',
+      descrizione: 'Una sonda passa dietro a Giove, che si muove a 13 km/s. Nel riferimento di Giove la sonda entra ed esce con la stessa velocità, ma rispetto al Sole ne guadagna moltissima: guarda la velocità nel pannello prima e dopo il passaggio (da 10 a circa 25 km/s). Il Sole non è disegnato: le velocità sono misurate nel riferimento in cui Giove si muove a 13 km/s, come rispetto al Sole. Così hanno viaggiato le sonde Voyager.',
       velocita: 6 * U.ORA, camera: { ampiezza: 1.6e10, centro: [1.5e9, -1e9] }, seleziona: 'Sonda',
       costruisci() {
         const giove = K.crea('gassoso', { nome: 'Giove', m: U.MG, vx: 1.3e4 });
@@ -131,7 +131,7 @@
     },
     {
       id: 'lagrange', gruppo: 'Sistema solare', nome: 'Asteroidi troiani (punti di Lagrange)',
-      descrizione: 'Due gruppi di asteroidi viaggiano sull\'orbita di Giove, 60° davanti e 60° dietro: sono i punti di Lagrange L4 e L5, dove l\'attrazione del Sole e di Giove si bilanciano. Prova a spostare un asteroide lontano da questi punti.',
+      descrizione: 'Due gruppi di asteroidi viaggiano sull\'orbita di Giove, 60° davanti e 60° dietro: sono i punti di Lagrange L4 e L5. Lì le attrazioni del Sole e di Giove non si annullano: insieme danno esattamente la forza che serve per girare intorno al Sole con lo stesso periodo di Giove, così l\'asteroide resta sempre alla stessa distanza dal pianeta. Gli asteroidi oscillano attorno a questi punti (orbite "a girino"). Prova a spostarne uno lontano.',
       velocita: 0.5 * U.ANNO, camera: { ampiezza: 14 * U.UA },
       costruisci() {
         const sole = K.crea('stella', { nome: 'Sole', colore: '#ffe08a' });
@@ -145,7 +145,7 @@
     },
     {
       id: 'buconero-sole', gruppo: 'Sistema solare', nome: 'E se il Sole diventasse un buco nero?',
-      descrizione: 'Il Sole è selezionato: nel pannello a destra cambia il suo tipo in "Buco nero". La massa resta la stessa… e le orbite dei pianeti non cambiano affatto! La gravità dipende dalla massa e dalla distanza, non dalle dimensioni.',
+      descrizione: 'Il Sole è selezionato: nel pannello a destra cambia il suo tipo in "Buco nero". La massa resta la stessa… e le orbite dei pianeti non cambiano affatto! La gravità dipende dalla massa e dalla distanza, non dalle dimensioni. Poi seleziona la Terra e guarda la temperatura: il buco nero non fa luce, e la Terra, sulla stessa orbita, gela a pochi gradi sopra lo zero assoluto.',
       velocita: 10 * U.GIORNO, camera: { ampiezza: 4 * U.UA }, seleziona: 'Sole',
       costruisci: () => ({ corpi: centra(solare(4)) })
     },
@@ -172,7 +172,7 @@
     },
     {
       id: 'triplo', gruppo: 'Sistemi stellari', nome: 'Sistema triplo gerarchico',
-      descrizione: 'Una coppia stretta di stelle e una terza stella lontana che gira intorno alla coppia: è la configurazione stabile più comune dei sistemi tripli (come Alfa Centauri, il sistema stellare più vicino a noi).',
+      descrizione: 'Una coppia stretta di stelle e una terza stella lontana che gira intorno alla coppia: è la configurazione stabile più comune dei sistemi tripli. Alfa Centauri, il sistema più vicino a noi, è fatto così, ma con proporzioni molto diverse: A e B distano 23 UA e Proxima, la terza, circa 13 000 UA. Qui le distanze sono compresse per vedere tutto insieme.',
       velocita: 20 * U.GIORNO, camera: { ampiezza: 26 * U.UA },
       costruisci() {
         const [a, b] = coppia(K.crea('stella', { nome: 'Stella A', m: 1.1 * U.MS, r: 1.2 * U.RS }), K.crea('stella', { nome: 'Stella B', m: 0.9 * U.MS, r: 0.86 * U.RS }), 1.5 * U.UA, 0.3);
@@ -183,7 +183,7 @@
     },
     {
       id: 'otto', gruppo: 'Sistemi stellari', nome: 'Tre stelle a forma di otto',
-      descrizione: 'Tre stelle uguali si inseguono lungo una stessa orbita a forma di 8: una soluzione speciale del "problema dei tre corpi" trovata nel 1993 al computer. È un equilibrio delicato: prova a spostare di poco una stella.',
+      descrizione: 'Tre stelle uguali si inseguono lungo una stessa orbita a forma di 8: una soluzione speciale del "problema dei tre corpi" trovata al computer da Cris Moore nel 1993 e dimostrata da Alain Chenciner e Richard Montgomery nel 2000. Sorprendentemente è stabile: se sposti di poco una stella, l\'8 si deforma ma resiste. Con spostamenti grandi o masse diverse, invece, si rompe.',
       velocita: 10 * U.GIORNO, camera: { ampiezza: 3 * U.UA },
       costruisci() {
         const v0 = Math.sqrt(G * U.MS / U.UA);
@@ -194,7 +194,7 @@
     },
     {
       id: 'pitagorico', gruppo: 'Sistemi stellari', nome: 'Tre corpi caotici (problema pitagorico)',
-      descrizione: 'Tre buchi neri di 3, 4 e 5 masse solari, fermi ai vertici di un triangolo rettangolo di lati 3-4-5. Il moto è caotico: dopo una lunga danza uno dei tre viene espulso e gli altri due restano legati. Il caos significa che una minima differenza iniziale cambia tutto.',
+      descrizione: 'Tre buchi neri di 3, 4 e 5 masse solari, fermi ai vertici di un triangolo rettangolo di lati 3-4-5. Il problema fu posto da Carl Burrau nel 1913 e risolto al computer da Victor Szebehely e C. Frederick Peters nel 1967. Il moto è caotico: dopo una lunga danza il più leggero viene espulso e gli altri due restano legati. Il caos significa che una minima differenza iniziale cambia tutto.',
       velocita: 0.5 * U.ANNO, camera: { ampiezza: 12 * U.UA },
       costruisci() {
         const d = [[3, 1, 3], [4, -2, -1], [5, 1, -1]];
@@ -232,8 +232,11 @@
     },
     {
       id: 'mareale', gruppo: 'Relatività', nome: 'Una stella troppo vicina a un buco nero',
-      descrizione: 'Una stella come il Sole cade verso un buco nero di un milione di masse solari. Entro il limite di Roche le forze di marea la fanno a pezzi: una parte del gas viene inghiottita, il resto si allunga in una lunga scia.',
+      descrizione: 'Una stella come il Sole cade verso un buco nero di un milione di masse solari. Entro il limite di Roche le forze di marea la fanno a pezzi: metà dei detriti resta legata al buco nero e torna indietro, metà sfugge per sempre. (In natura i detriti legati formano un disco che il buco nero inghiotte, con un lampo che dura mesi: un "evento di distruzione mareale". Qui basta la fisica di Newton.)',
       velocita: U.ORA, camera: { ampiezza: 14 * U.UA }, seleziona: 'Stella',
+      programma: [{ quando: trova => !trova('Stella') && trova('Buco nero supermassiccio'), fai: () => {
+        Grav.ui.avviso('Spaghettificazione', 'La stella è stata stirata e fatta a pezzi. I frammenti più vicini al buco nero hanno meno energia e restano in orbita; quelli più lontani ne hanno di più e se ne vanno. I telescopi osservano decine di questi eventi ogni anno.', 14);
+      } }],
       costruisci() {
         const bh = K.crea('buco', { nome: 'Buco nero supermassiccio', m: 1e6 * U.MS });
         return { corpi: [bh, parabola(K.crea('stella', { nome: 'Stella', colore: '#ffe08a' }), bh, 6 * U.UA, 0.4 * U.UA, 150)] };
@@ -245,6 +248,10 @@
       id: 'supernova', gruppo: 'Esplosioni e urti', nome: 'Supernova in un sistema doppio',
       descrizione: 'Una stella di 15 masse solari con una compagna simile al Sole. La stella grande è selezionata: premi "Supernova" nel pannello a destra. Perde quasi tutta la massa in un istante e la compagna, non più trattenuta, schizza via.',
       velocita: 20 * U.GIORNO, camera: { ampiezza: 10 * U.UA }, seleziona: 'Stella massiccia',
+      programma: [{ quando: trova => !trova('Stella massiccia') && (trova('Compagna') || trova('Compagna (un Sole)')), fai: trova => {
+        const c = trova('Compagna') || trova('Compagna (un Sole)');
+        Grav.ui.avviso('Una stella in fuga', `La compagna non è più trattenuta e fugge a circa ${Grav.fmt.velocita(Math.hypot(c.vx, c.vy, c.vz))}. In cielo vediamo davvero stelle "in fuga" nate così, come Zeta Ophiuchi. Semplificazione: una vera supergigante di 15 masse solari sarebbe larga qualche UA e non entrerebbe in un'orbita così stretta.`, 14);
+      } }],
       opzione: {
         etichetta: 'Aggiungi la Terra e la Luna',
         testo: 'Attorno alla compagna girano una Terra e la sua Luna; la coppia di stelle è a 12 UA, perché più vicine la Terra non avrebbe un\'orbita stabile. Dopo l\'esplosione la compagna schizza via portandosi dietro Terra e Luna, che restano legate alla loro stella.',
@@ -316,9 +323,12 @@
       id: 'theia', gruppo: 'Eventi della storia cosmica', nome: '4,5 miliardi di anni fa: Theia e la nascita della Luna',
       descrizione: 'La Terra primordiale e Theia, un pianeta grande come Marte, si scontrano di striscio. Parte del materiale viene scagliata in orbita e forma un disco di frammenti e detriti: secondo l\'ipotesi più accreditata la Luna si è formata da quel disco in pochi anni (qui i frammenti più grandi possono fondersi tra loro). Prova a cambiare la velocità di Theia e l\'angolo dell\'impatto.',
       velocita: 600, camera: { ampiezza: 1.5e8 },
+      programma: [{ quando: trova => !trova('Theia') && trova('Terra primordiale'), fai: () => {
+        Grav.ui.avviso('Un oceano di magma', 'L\'energia dell\'urto fonde la superficie della Terra e forse buona parte del mantello: per migliaia di anni il pianeta resta coperto da un oceano di roccia fusa (il bagliore arancione). I frammenti in orbita si urtano e si riuniscono: la Luna si forma in pochi anni, o forse, secondo alcune simulazioni recenti, addirittura in poche ore.', 16);
+      } }],
       costruisci() {
         const terra = K.crea('roccioso', { nome: 'Terra primordiale', m: 0.9 * U.MT, r: 6.15e6, colore: '#c26a3d' });
-        const theia = K.crea('roccioso', { nome: 'Theia', m: 0.11 * U.MT, r: 3.39e6, colore: '#8f8a80', x: 4.5e7, y: 6.5e6, vx: -4e3 });
+        const theia = K.crea('roccioso', { nome: 'Theia', m: 0.11 * U.MT, r: 3.39e6, colore: '#8f8a80', x: 4.5e7, y: 1.53e7, vx: -4e3 });   // urto a circa 45°
         return { corpi: centra([terra, theia]) };
       }
     },
@@ -326,6 +336,12 @@
       id: 'chicxulub', gruppo: 'Eventi della storia cosmica', nome: '66 milioni di anni fa: l\'asteroide dei dinosauri',
       descrizione: 'Un asteroide largo circa 10 km sta per colpire la Terra, nell\'attuale penisola dello Yucatán (Messico). Il cratere di Chicxulub, sepolto sotto i sedimenti, è largo 180 km. Seleziona l\'asteroide: la linea tratteggiata mostra che finirà dritto sulla Terra.',
       velocita: 600, camera: { ampiezza: 9e8 }, seleziona: 'Asteroide di Chicxulub',
+      programma: [{ quando: trova => !trova('Asteroide di Chicxulub') && trova('Terra'), fai: trova => {
+        const t = trova('Terra');
+        Grav.vista.seguito = t.id; Grav.vista.inquadra(9 * U.RT, t.x, t.y);
+        Grav.ui.impostaVel(Grav.ui.velIndiceVicino(60));
+        Grav.ui.avviso('Zoom sull\'impatto', 'Il tempo ora scorre a un minuto al secondo. Le rocce fuse e vaporizzate ricadono su tutto il pianeta come una pioggia di fuoco; polveri e fuliggine avvolgono la Terra (il velo scuro) e oscurano il Sole per mesi o anni: un lungo inverno da impatto.', 16);
+      } }],
       costruisci() {
         const terra = K.crea('roccioso', { nome: 'Terra' });
         const luna = orbita(K.crea('luna', { nome: 'Luna' }), terra, 3.844e8, 0.0549, 0, 0, 0, 70);
@@ -337,7 +353,7 @@
     },
     {
       id: '1054', gruppo: 'Eventi della storia cosmica', nome: '1054: la supernova della Nebulosa del Granchio',
-      descrizione: 'Una stella di circa 12 masse solari è arrivata alla fine: tra pochi istanti esploderà. Il 4 luglio 1054 gli astronomi cinesi registrarono una "stella ospite" nella costellazione del Toro, così brillante da essere visibile di giorno per 23 giorni.',
+      descrizione: 'Una supergigante rossa di circa 10 masse solari, larga come l\'orbita di Marte, è arrivata alla fine: tra pochi istanti il suo nucleo collasserà. Il 4 luglio 1054 gli astronomi cinesi registrarono una "stella ospite" nella costellazione del Toro, così brillante da essere visibile di giorno per 23 giorni.',
       velocita: U.GIORNO, camera: { ampiezza: 60 * U.UA }, seleziona: 'Progenitrice del Granchio',
       opzione: {
         etichetta: 'Aggiungi Sole, Terra e Luna (e se fosse vicina?)',
@@ -345,15 +361,20 @@
       },
       programma: [{ t: 3 * U.GIORNO, fai: trova => {
         const b = trova('Progenitrice del Granchio');
-        if (!b || b.tipo !== 'stella') return;
+        if (!b || (b.tipo !== 'stella' && b.tipo !== 'gigante')) return;
         Grav.sim.supernova(b);
-        Grav.ui.avviso('4 luglio 1054', 'Oggi in quel punto del cielo c\'è la Nebulosa del Granchio, una nube di gas che si espande a 1500 km/s. Al centro c\'è una pulsar: una stella di neutroni che ruota su se stessa 30 volte al secondo.', 16);
+        // la futura Nebulosa del Granchio: filamenti più lenti che restano attorno alla pulsar
+        Grav.sim.emetti({ x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, n: 450, r0: 1e10, vmin: 9e5, vmax: 1.6e6, colori: ['#ff6a4d', '#ff9a5c', '#ffc07a', '#7fb2ff', '#a9c8ff'], vita: Infinity, dim: 1.7 });
+        Grav.ui.avviso('4 luglio 1054', 'Nasce la Nebulosa del Granchio: i filamenti rossi e arancioni sono gas della stella, l\'alone azzurro è luce emessa da elettroni velocissimi spinti dalla pulsar. Oggi la nebulosa è larga 11 anni luce e si espande a circa 1500 km/s; la pulsar al centro ruota su se stessa 30 volte al secondo.', 16);
+      } }, { t: 26 * U.GIORNO, fai: trova => {
+        if (trova('Progenitrice del Granchio')) return;
+        Grav.ui.avviso('27 luglio 1054', 'Dopo 23 giorni la "stella ospite" non si vede più in pieno giorno. Di notte resterà visibile a occhio nudo per quasi due anni (653 giorni), poi sparirà. Nessuna cronaca europea sicura ne parla: la conosciamo dagli annali cinesi e giapponesi.', 14);
       } }, { t: 7.6 * U.GIORNO, fai: trova => {
         if (!trova('Terra') || trova('Progenitrice del Granchio')) return;
         Grav.ui.avviso('L\'onda d\'urto raggiunge la Terra', 'I detriti più veloci, a 10 000 km/s, hanno percorso 25 UA in poco più di 4 giorni. A questa distanza le radiazioni dell\'esplosione avrebbero già distrutto lo strato di ozono. A 6500 anni luce, invece, nel 1054 arrivò soltanto la luce: una nuova "stella" nel cielo.', 16);
       } }],
       costruisci(conTerra) {
-        const stella = K.crea('stella', { nome: 'Progenitrice del Granchio', m: 12 * U.MS, r: 9 * U.RS });
+        const stella = K.crea('gigante', { nome: 'Progenitrice del Granchio', m: 10 * U.MS, r: 500 * U.RS, colore: '#ff7a4a' });
         if (!conTerra) return { corpi: [stella] };
         const sole = K.crea('stella', { nome: 'Sole', colore: '#ffe08a', x: 25 * U.UA * Math.cos(200 * rad), y: 25 * U.UA * Math.sin(200 * rad) });
         const terra = orbita(K.crea('roccioso', { nome: 'Terra' }), sole, U.UA, 0.0167, 0, 0, 0, 0);
@@ -363,8 +384,11 @@
     },
     {
       id: 'halley', gruppo: 'Eventi della storia cosmica', nome: '1758: il ritorno della cometa di Halley',
-      descrizione: 'Edmund Halley usò le leggi di Newton per capire che le comete del 1531, del 1607 e del 1682 erano la stessa, e ne predisse il ritorno per il 1758. Halley era morto da 16 anni quando, la notte di Natale del 1758, la cometa riapparve: un trionfo della gravitazione universale. La sua orbita è molto allungata e "al contrario" rispetto ai pianeti; torna ogni 76 anni circa, la prossima volta nel 2061.',
+      descrizione: 'Edmund Halley usò le leggi di Newton per capire che le comete del 1531, del 1607 e del 1682 erano la stessa, e ne predisse il ritorno per il 1758. Halley era morto da quasi 17 anni quando, la notte di Natale del 1758, la cometa riapparve: un trionfo della gravitazione universale. La sua orbita è molto allungata e "al contrario" rispetto ai pianeti; torna ogni 76 anni circa, la prossima volta nel 2061.',
       velocita: 10 * U.GIORNO, camera: { ampiezza: 7 * U.UA }, seleziona: 'Cometa di Halley',
+      programma: [{ quando: trova => { const c = trova('Cometa di Halley'), s = trova('Sole'); return c && s && Math.hypot(c.x - s.x, c.y - s.y, c.z - s.z) < 0.62 * U.UA; }, fai: () => {
+        Grav.ui.avviso('Perielio', 'La cometa passa a 0,59 UA dal Sole a circa 55 km/s. Il ghiaccio evapora e trascina polvere: si formano due code, una di gas azzurra, dritta e sempre opposta al Sole (la spinge il vento solare), e una di polveri giallina, più larga e incurvata. Ogni passaggio la cometa perde qualche metro di superficie.', 14);
+      } }],
       costruisci() {
         const L = solare(6);
         L.push(orbita(K.crea('cometa', { nome: 'Cometa di Halley', m: 2.2e14, r: 5.5e3 }), L[0], 17.83 * U.UA, 0.967, 162.26, 58.42, 111.33, -4));
@@ -375,7 +399,15 @@
       id: 'nettuno', gruppo: 'Eventi della storia cosmica', nome: '1846: Nettuno, il pianeta trovato con i calcoli',
       descrizione: 'Urano non seguiva esattamente l\'orbita prevista: qualcosa lo tirava. Urbain Le Verrier calcolò dove doveva trovarsi un pianeta sconosciuto e il 23 settembre 1846 Johann Galle lo trovò a meno di un grado dal punto previsto. Prova: elimina Nettuno e confronta l\'orbita di Urano (con ↺ torni indietro).',
       velocita: 2 * U.ANNO, camera: { ampiezza: 75 * U.UA }, opz: { scia: 'lunga' }, seleziona: 'Urano',
-      costruisci: () => ({ corpi: centra(solare(8)) })
+      opzione: {
+        etichetta: 'Nettuno 30 volte più massiccio (effetto esagerato)',
+        testo: 'Con la massa vera, togliere Nettuno sposta Urano di appena 0,01 UA: troppo poco per vederlo qui, eppure Le Verrier lo misurò nei dati. Con un Nettuno 30 volte più massiccio la spinta si vede a occhio: prima del 1822 (congiunzione) Nettuno tira Urano in avanti, dopo lo trattiene.'
+      },
+      costruisci(forte) {
+        const L = solare(8);
+        if (forte) { const n = L.find(b => b.nome === 'Nettuno'); n.m *= 30; n.r *= 3; }
+        return { corpi: centra(L) };
+      }
     },
     {
       id: 'sl9', gruppo: 'Eventi della storia cosmica', nome: '1994: la cometa Shoemaker-Levy 9 contro Giove',
@@ -391,7 +423,7 @@
     },
     {
       id: 'buchineri', gruppo: 'Eventi della storia cosmica', nome: '2015: la prima onda gravitazionale (GW150914)', modo: 'relativistica',
-      descrizione: 'Due buchi neri di 36 e 29 masse solari, a 1,3 miliardi di anni luce. Il 14 settembre 2015 gli strumenti LIGO registrarono per la prima volta le onde gravitazionali previste da Einstein cento anni prima (premio Nobel 2017). I buchi neri perdono energia, si avvicinano a spirale sempre più in fretta e si fondono. Guarda il grafico "Onde gravitazionali": è il famoso "cinguettio" (chirp).',
+      descrizione: 'Due buchi neri di 36 e 29 masse solari, a 1,3 miliardi di anni luce. Il 14 settembre 2015 gli strumenti LIGO registrarono per la prima volta le onde gravitazionali previste da Einstein cento anni prima (premio Nobel 2017). I buchi neri perdono energia, si avvicinano a spirale sempre più in fretta e si fondono. Guarda il grafico "Onde gravitazionali": è il famoso "cinguettio" (chirp). Alla fusione lo senti anche, trasformato in suono e rallentato, come fecero i ricercatori di LIGO.',
       velocita: 0.1, camera: { ampiezza: 5e6 }, grafico: 'onde',
       costruisci: () => ({ corpi: coppia(K.crea('buco', { nome: 'Buco nero 36 M☉', m: 36 * U.MS }), K.crea('buco', { nome: 'Buco nero 29 M☉', m: 29 * U.MS }), 1.5e6) })
     },
@@ -407,7 +439,7 @@
     },
     {
       id: 'neutroni', gruppo: 'Eventi della storia cosmica', nome: '2017: la kilonova GW170817', modo: 'relativistica',
-      descrizione: 'Due stelle di neutroni a 130 milioni di anni luce. Il 17 agosto 2017 la loro fusione fu osservata sia con le onde gravitazionali sia con i telescopi di tutto il mondo: si vide nascere oro e platino. Qui partono da 100 km di distanza: spiraleggiano, si scontrano ed esplodono in una kilonova.',
+      descrizione: 'Due stelle di neutroni a 130 milioni di anni luce. Il 17 agosto 2017 la loro fusione fu osservata sia con le onde gravitazionali sia con i telescopi di tutto il mondo: la sua luce mostrò la formazione di elementi pesanti (nel 2019 vi fu riconosciuto lo stronzio). Alla fusione ascolta il "cinguettio". Qui partono da 100 km di distanza: spiraleggiano, si scontrano ed esplodono in una kilonova.',
       velocita: 0.03, camera: { ampiezza: 4e5 }, grafico: 'onde',
       costruisci: () => ({ corpi: coppia(K.crea('neutroni', { nome: 'Stella di neutroni A', m: 1.4 * U.MS }), K.crea('neutroni', { nome: 'Stella di neutroni B', m: 1.3 * U.MS }), 1e5) })
     },
@@ -423,7 +455,7 @@
     },
     {
       id: 'andromeda', gruppo: 'Eventi della storia cosmica', nome: 'Fra 4,5 miliardi di anni: Via Lattea contro Andromeda',
-      descrizione: 'La galassia di Andromeda si avvicina alla nostra a 110 km/s. Secondo le stime più citate, fra circa 4,5 miliardi di anni le due galassie si sfioreranno, poi torneranno indietro e si fonderanno in un\'unica grande galassia ellittica (qualcuno l\'ha già chiamata "Lattomeda"). Il pallino giallo è il Sole: dove finirà? Le stelle quasi mai si scontrano. Le masse includono la materia oscura; date ed esito sono stime incerte. Semplificazione: ogni galassia è un unico punto massiccio, perciò le stelle del disco (e il Sole) girano più in fretta che nella realtà.',
+      descrizione: 'La galassia di Andromeda si avvicina alla nostra a 110 km/s. Secondo le stime più citate, fra circa 4,5 miliardi di anni le due galassie si sfioreranno, poi torneranno indietro e probabilmente si fonderanno in un\'unica grande galassia ellittica (uno studio del 2025 stima circa una possibilità su due) (qualcuno l\'ha già chiamata "Lattomeda"). Il pallino giallo è il Sole: dove finirà? Le stelle quasi mai si scontrano. Le masse includono la materia oscura; date ed esito sono stime incerte. Semplificazione: ogni galassia è un unico punto massiccio, perciò le stelle del disco (e il Sole) girano più in fretta che nella realtà.',
       velocita: 1e8 * U.ANNO, dtMax: 4e13, eta: 0.04, camera: { ampiezza: 3.6e22, centro: [-2.4e21, 0] }, seleziona: 'Sole',
       costruisci() {
         const vl = K.crea('galassia', { nome: 'Via Lattea', m: 1.0e12 * U.MS, colore: '#fff1d0' });
@@ -540,7 +572,8 @@
         ['14 ottobre 2017', 'Passa a circa 24 milioni di km dalla Terra.'],
         ['19 ottobre 2017', 'Viene scoperto mentre già si allontana: è il primo oggetto interstellare conosciuto (sigla 1I).'],
         ['2018', 'Si scopre una piccola accelerazione non dovuta alla gravità, forse causata da gas che evapora. La forma è molto allungata e il colore rossastro.'],
-        ['2019', 'Gennadij Borisov scopre il secondo visitatore interstellare, la cometa 2I/Borisov.']
+        ['2019', 'Gennadij Borisov scopre il secondo visitatore interstellare, la cometa 2I/Borisov.'],
+        ['2025', 'Il 1° luglio il telescopio ATLAS scopre la cometa 3I/ATLAS, il terzo oggetto interstellare conosciuto.']
       ]
     },
     neutroni: {

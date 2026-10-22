@@ -50,6 +50,7 @@
     const tFine = fine === 'crunch' ? 2 * svolta.t : fine === 'rip' ? t : Math.min(t, 60 * GA);
     tab = { lnA, T, svolta, fine, tFine, tInizio: T[0] };
     tab.t0 = Math.exp(lnA[lnA.length - 1]) >= 1 ? tDaA(1) : null;
+    costruisciScala();
     // fattore di crescita delle strutture, normalizzato al nostro universo
     const g = a => {
       const e = E2(a), om = P.Om / (a * a * a) / e, ol = P.OL * Math.pow(a, -3 * (1 + P.w)) / e;
@@ -94,18 +95,35 @@
     return tab.svolta && t > tab.svolta.t ? -h : h;
   };
 
-  /* ---------- Scala del tempo: logaritmica all'inizio, lineare dopo 100 milioni di anni ---------- */
-  const U_LOG = 0.45, T_MIN = 1e-36, T_DIV = 1e8 * ANNO;
+  /* ---------- Scala del tempo: a tratti, con più spazio alle epoche in cui succede qualcosa ----------
+     Logaritmica fino a 100 milioni di anni, lineare dopo. Ogni tratto: [fine, quota del cursore]. */
+  const T_MIN = 1e-36, T_LIN = 1e8 * ANNO;
+  const TRATTI = [[1e-32, 3], [1e-12, 3], [1e-5, 6], [1e-3, 5], [1, 5], [10, 4], [100, 3], [1500, 6], [1e12, 4], [4e12, 2], [3e13, 8],
+    [T_LIN, 4], [1e9 * ANNO, 10], [14e9 * ANNO, 20], [60e9 * ANNO, 17]];
+  let scala = [];
+  const misura = (t0, t1, t) => t1 <= T_LIN ? Math.log(t / t0) / Math.log(t1 / t0) : (t - t0) / (t1 - t0);
+  function costruisciScala() {
+    scala = [{ t: T_MIN, u: 0 }];
+    let u = 0, prec = T_MIN;
+    for (let k = 0; k < TRATTI.length; k++) {
+      let [t, w] = TRATTI[k];
+      if (k === TRATTI.length - 1) t = Math.max(t, tab.tFine);
+      if (t >= tab.tFine) { u += w * misura(prec, t, tab.tFine); scala.push({ t: tab.tFine, u }); break; }
+      u += w; scala.push({ t, u }); prec = t;
+    }
+    for (const n of scala) n.u /= u;
+  }
   function tDaU(u) {
-    if (tab.tFine <= T_DIV * 2) return Math.pow(10, Math.log10(T_MIN) + u * (Math.log10(tab.tFine) - Math.log10(T_MIN)));
-    if (u <= U_LOG) return Math.pow(10, Math.log10(T_MIN) + u / U_LOG * (Math.log10(T_DIV) - Math.log10(T_MIN)));
-    return T_DIV + (u - U_LOG) / (1 - U_LOG) * (tab.tFine - T_DIV);
+    u = Math.max(0, Math.min(1, u));
+    let k = 1; while (k < scala.length - 1 && scala[k].u < u) k++;
+    const a = scala[k - 1], b = scala[k], f = (u - a.u) / (b.u - a.u || 1);
+    return b.t <= T_LIN ? a.t * Math.pow(b.t / a.t, f) : a.t + f * (b.t - a.t);
   }
   function uDaT(t) {
     t = Math.max(T_MIN, Math.min(tab.tFine, t));
-    if (tab.tFine <= T_DIV * 2) return (Math.log10(t) - Math.log10(T_MIN)) / (Math.log10(tab.tFine) - Math.log10(T_MIN));
-    if (t <= T_DIV) return U_LOG * (Math.log10(t) - Math.log10(T_MIN)) / (Math.log10(T_DIV) - Math.log10(T_MIN));
-    return U_LOG + (1 - U_LOG) * (t - T_DIV) / (tab.tFine - T_DIV);
+    let k = 1; while (k < scala.length - 1 && scala[k].t < t) k++;
+    const a = scala[k - 1], b = scala[k];
+    return a.u + (b.u - a.u) * misura(a.t, b.t, t);
   }
 
   function tempoCosmico(t) {
@@ -160,6 +178,12 @@
       if (dx * dx + dy * dy < 0.02 && c.dc[i] < dmin) { dmin = c.dc[i]; vl = i; }
     }
     c.viaLattea = vl;
+    // i picchi di densità (collassano per primi): qui nascono le prime stelle, i primi buchi neri e i quasar
+    c.picchi = [];
+    for (const i of Array.from({ length: N }, (_, i) => i).sort((x, y) => c.m1[x] - c.m1[y])) {
+      if (c.picchi.length >= 160) break;
+      if (c.picchi.every(j => { let dx = c.qx[i] - c.qx[j], dy = c.qy[i] - c.qy[j]; dx -= Math.round(dx); dy -= Math.round(dy); return dx * dx + dy * dy > 0.0016; })) c.picchi.push(i);
+    }
     return c;
   }
 
@@ -179,6 +203,11 @@
       if (P.Om / (a * a * a) + (1 + 3 * P.w) * P.OL * Math.pow(a, -3 * (1 + P.w)) < 0) { acc = t(a); break; }
     }
     nodi.accelera = acc; nodi.svolta = pt;
+    // prime stelle (da z = 20 a z = 9) e bolle di reionizzazione (da z = 18 a z = 7), nei picchi di densità
+    const pk = campo.picchi;
+    nodi.pop = pk.slice(0, 40).map((i, r) => ({ i, r, t: t(1 / (21 - 11 * Math.pow(r / 39, 0.7))) }));
+    nodi.bolle = pk.map((i, r) => ({ i, t: t(1 / (19 - 11 * Math.pow(r / (pk.length - 1), 0.8))), R: 0.075 + 0.06 * campo.sem[i] }));
+    nodi.z6 = t(1 / 7); nodi.reion = t(1 / 11);
   }
   function epoca(t) {
     const a = aDaT(t), T = T0K / a, contrazione = tab.svolta && t > tab.svolta.t;
@@ -187,20 +216,27 @@
       if (T > 3000) return { titolo: 'Big Crunch', testo: 'L\'universo ricollassa in uno stato caldissimo e densissimo, come un Big Bang al contrario. Gli atomi si spezzano, la luce torna intrappolata nel plasma. Che cosa succeda dopo, nessuno lo sa.' };
       return { titolo: 'La grande contrazione', testo: 'La gravità della materia ha vinto: l\'espansione si è fermata e l\'universo si contrae. Le galassie si avvicinano e si scontrano, la radiazione di fondo si riscalda sempre di più.' };
     }
+    const z = 1 / a - 1;
     if (t < 1e-32) return { titolo: 'Inflazione cosmica', testo: 'In una frazione di secondo inimmaginabile lo spazio si gonfia di almeno 10²⁶ volte. Minuscole fluttuazioni quantistiche vengono "stirate" fino a diventare i semi delle future galassie. È la teoria più accreditata, ma non ancora dimostrata del tutto.' };
-    if (T > 1e12) return { titolo: 'Plasma di quark e gluoni', testo: 'Fa troppo caldo perché esistano protoni e neutroni: c\'è una "zuppa" di quark, gluoni, elettroni, neutrini e luce. Una piccolissima prevalenza della materia sull\'antimateria sopravvive: è la materia di cui siamo fatti.' };
-    if (T > 1e9) return { titolo: 'Nascono protoni e neutroni', testo: 'I quark si uniscono a gruppi di tre formando protoni e neutroni. Materia e antimateria si annichilano quasi del tutto, trasformandosi in luce.' };
-    if (T > 3e8) return { titolo: 'Nucleosintesi primordiale', testo: 'Per qualche minuto l\'universo è come il centro di una stella: protoni e neutroni si fondono in nuclei di elio. Poi fa troppo "freddo" e tutto si ferma: circa 75% idrogeno e 25% elio, con tracce di litio. Lo misuriamo ancora oggi, ed è una delle prove del Big Bang.' };
-    if (T > 3400) return { titolo: 'Un mare di plasma opaco', testo: 'Nuclei ed elettroni sono separati: la luce rimbalza continuamente sugli elettroni liberi e non riesce a viaggiare. L\'universo è una nebbia incandescente. Le zone appena più dense (le macchie più chiare) attirano la materia.' };
-    if (T > 2000) return { titolo: 'La prima luce', testo: 'Circa 380 000 anni dopo il Big Bang gli elettroni si legano ai nuclei: nascono i primi atomi e lo spazio diventa trasparente. Quella luce viaggia ancora: la riceviamo oggi, raffreddata a 2,7 gradi sopra lo zero assoluto, come radiazione cosmica di fondo a microonde.' };
-    if (t < n.stelle) return { titolo: 'L\'età oscura', testo: 'Non ci sono ancora stelle: solo idrogeno, elio e materia oscura. La gravità fa crescere lentamente le differenze di densità: le zone più dense diventano sempre più dense, quelle vuote sempre più vuote.' };
-    if (t < n.galassie) return { titolo: 'Le prime stelle', testo: 'Nei nodi più densi della "ragnatela cosmica" si accendono le prime stelle, enormi e di vita brevissima, e poi le prime galassie. La loro luce ultravioletta torna a ionizzare il gas tra le galassie (reionizzazione).' };
+    if (T > 2e12) return { titolo: 'Plasma di quark e gluoni', testo: 'Fa troppo caldo perché esistano protoni e neutroni: c\'è una "zuppa" di quark (i puntini colorati) legati e slegati di continuo dai gluoni (i trattini gialli), con elettroni, neutrini e luce. Dalla luce nascono senza sosta coppie di particelle e antiparticelle (i cerchietti vuoti), che si annichilano subito in un lampo. La materia supera l\'antimateria di circa una particella su un miliardo: è quella che sopravviverà, ed è ciò di cui siamo fatti.' };
+    if (T > 3e10) return { titolo: 'Nascono protoni e neutroni', testo: 'A circa un milionesimo di secondo i quark si chiudono a gruppi di tre: due quark "su" e uno "giù" formano un protone (rosso), uno "su" e due "giù" un neutrone (grigio). Da allora i quark non si trovano più isolati. Quark e antiquark si annichilano quasi tutti, trasformandosi in luce.' };
+    if (T > 3e9) return { titolo: 'Neutrini liberi, elettroni contro positroni', testo: 'Intorno a un secondo i neutrini smettono di interagire: da allora viaggiano liberi e attraversano ancora oggi tutto l\'universo. I neutroni, un po\' più pesanti dei protoni, si trasformano in protoni e non vengono più ricreati: ne resta circa uno ogni sei protoni. Poi elettroni e positroni (cerchietti rosa) si annichilano: sopravvive solo il piccolo eccesso di elettroni, uno per ogni protone.' };
+    if (T > 9e8) return { titolo: 'Il collo di bottiglia del deuterio', testo: 'Protoni e neutroni si uniscono di continuo in nuclei di deuterio, ma la luce è ancora così energetica che li spezza subito. Intanto una parte dei neutroni liberi decade in protoni: un neutrone isolato vive in media un quarto d\'ora.' };
+    if (T > 3e8) return { titolo: 'Nucleosintesi primordiale', testo: 'Per qualche minuto l\'universo è come il centro di una stella: prima protone e neutrone formano il deuterio, poi due deuteri formano un nucleo di elio (2 protoni e 2 neutroni). Quasi tutti i neutroni finiscono nell\'elio. Poi fa troppo "freddo" e tutto si ferma: in massa circa 75% idrogeno e 25% elio, con tracce di deuterio e litio. Lo misuriamo ancora oggi, ed è una delle prove del Big Bang.' };
+    if (T > 4200) return { titolo: 'Un mare di plasma opaco', testo: 'Nuclei ed elettroni sono separati. La luce urta di continuo gli elettroni liberi e cambia direzione a zig-zag (guarda le scie dei fotoni): non riesce a viaggiare e l\'universo è una nebbia incandescente. Per ogni protone ci sono circa un miliardo di fotoni. Sotto i 6000 gradi circa i nuclei di elio catturano per primi i loro due elettroni.' };
+    if (T > 2700) return { titolo: 'Nascono i primi atomi', testo: 'Intorno ai 3000 gradi, circa 380 000 anni dopo il Big Bang, i protoni catturano gli elettroni e diventano atomi di idrogeno. Ogni elettrone che si lega è un ostacolo in meno per la luce: le scie dei fotoni diventano dritte. Gli astronomi chiamano questo momento "ricombinazione".' };
+    if (T > 1700) return { titolo: 'La prima luce', testo: 'Lo spazio è diventato trasparente e la luce viaggia libera. È ancora qui: la riceviamo oggi, raffreddata a 2,7 gradi sopra lo zero assoluto, come radiazione cosmica di fondo a microonde. Le sue macchie appena più chiare o più scure sono le zone più o meno dense: i semi delle future galassie.' };
+    if (t < n.pop[0].t) return { titolo: 'L\'età oscura', testo: 'Non ci sono ancora stelle: solo idrogeno, elio e materia oscura. La gravità fa crescere lentamente le differenze di densità: le zone più dense diventano sempre più dense, quelle vuote sempre più vuote. Nella lente, la luce della prima luce si allunga verso il rosso e diventa invisibile.' };
+    if (z > 14) return { titolo: 'Le prime stelle e i primi buchi neri', testo: 'Fra 100 e 200 milioni di anni dopo il Big Bang, nei punti più densi della ragnatela si accendono le prime stelle: enormi (anche cento volte il Sole), azzurre e fatte solo di idrogeno ed elio. Vivono pochi milioni di anni (qui molto di più, per poterle vedere), poi esplodono come supernove spargendo i primi elementi pesanti. Le più grandi lasciano un buco nero.' };
+    if (z > 6) return { titolo: 'Reionizzazione', testo: 'La luce ultravioletta delle prime stelle e galassie strappa di nuovo gli elettroni agli atomi del gas tra le galassie: attorno a ogni sorgente cresce una bolla di gas ionizzato (in viola). Le bolle si allargano e si uniscono finché, circa un miliardo di anni dopo il Big Bang, tutto il gas è ionizzato. Ormai però è così rarefatto che la luce passa lo stesso.' };
+    if (z > 1.5) return { titolo: 'Quasar e galassie che si fondono', testo: 'Le galassie crescono inghiottendone di più piccole: nella lente si formano così la Via Lattea e Andromeda. Al centro delle galassie i buchi neri supermassicci divorano gas e si accendono come quasar, gli oggetti più luminosi dell\'universo, con getti di materia quasi alla velocità della luce. Circa 10 miliardi di anni fa nascevano più stelle che in qualunque altra epoca.' };
     if (n.solare && t >= n.solare && t < n.solare + 0.6 * GA) return { titolo: 'Nasce il Sistema solare', testo: 'Circa 4,6 miliardi di anni fa, in un braccio della Via Lattea, una nube di gas collassa: nascono il Sole e i pianeti. Il ferro, il carbonio e l\'ossigeno di cui siamo fatti erano stati prodotti da stelle esplose prima.' };
-    if (tab.t0 && Math.abs(t - tab.t0) < 0.4 * GA) return { titolo: 'Oggi', testo: `L'universo ha ${tempoCosmico(tab.t0)}. Le galassie si allontanano le une dalle altre: più sono lontane, più in fretta si allontanano (legge di Hubble-Lemaître). La luce più antica che vediamo, la radiazione di fondo, ci arriva da una regione che oggi dista circa 46 miliardi di anni luce.` };
+    if (tab.t0 && Math.abs(t - tab.t0) < 0.4 * GA) return { titolo: 'Oggi', testo: `L'universo ha ${tempoCosmico(tab.t0)}. Le galassie si allontanano le une dalle altre: più sono lontane, più in fretta si allontanano (legge di Hubble-Lemaître). Andromeda invece, legata a noi dalla gravità, si avvicina a circa 110 km/s. La luce più antica che vediamo, la radiazione di fondo, ci arriva da una regione che oggi dista circa 46 miliardi di anni luce.` };
     if (tab.t0 && t > tab.t0) {
       if (tab.fine === 'rip' && t > tab.tFine - 3 * GA) return { titolo: 'Big Rip', testo: 'L\'energia oscura "fantasma" cresce senza limite: l\'espansione strappa prima gli ammassi di galassie, poi le galassie, i sistemi solari, i pianeti e infine gli atomi stessi.' };
       if (n.svolta && t > n.svolta - 3 * GA) return { titolo: 'L\'espansione si ferma', testo: 'La gravità di tutta la materia frena l\'espansione fino a fermarla. Da qui in poi l\'universo comincerà a contrarsi.' };
-      if (n.accelera) return { titolo: 'Il futuro lontano', testo: 'L\'espansione accelera: le galassie lontane si allontanano sempre più in fretta e spariscono oltre l\'orizzonte. Fra circa 5 miliardi di anni la Via Lattea e Andromeda si fonderanno. Fra migliaia di miliardi di anni le ultime stelle si spegneranno: un universo freddo e buio.' };
+      if (n.accelera && t < tab.t0 + 7 * GA) return { titolo: 'Via Lattea e Andromeda si fondono', testo: 'Fra circa 4,5 miliardi di anni la Via Lattea e Andromeda si scontrano e in un paio di miliardi di anni diventano un\'unica grande galassia ellittica. Le stelle sono così distanti tra loro che quasi non si urtano. Le galassie degli altri gruppi, invece, non sono legate a noi: l\'espansione le allontana sempre più in fretta.' };
+      if (n.accelera) return { titolo: 'Il futuro lontano', testo: 'L\'espansione accelera: le galassie degli altri gruppi si allontanano sempre più in fretta e spariscono oltre l\'orizzonte, mentre il nostro gruppo, tenuto insieme dalla gravità, resta unito. Fra migliaia di miliardi di anni le ultime stelle si spegneranno: un universo freddo e buio.' };
       return { titolo: 'Il futuro lontano', testo: 'Senza energia oscura l\'espansione continua, ma rallenta sempre di più. Le stelle consumano il loro combustibile e una dopo l\'altra si spengono.' };
     }
     if (n.accelera && t > n.accelera) return { titolo: 'L\'espansione accelera', testo: 'Da qualche miliardo di anni l\'energia oscura conta più della materia e l\'espansione, invece di rallentare, accelera. Che cosa sia l\'energia oscura è uno dei grandi misteri della fisica di oggi.' };
@@ -216,11 +252,9 @@
     return [r, g, b].map(v => Math.round(Math.max(0, Math.min(255, v))));
   }
 
-  function disegna() {
-    const t = tDaU(Uni.u), a = aDaT(t), T = T0K / a, D = crescita(t), cx = W / 2, cy = H / 2 - 30;
-    const z = 1 / a - 1, contrazione = tab.svolta && t > tab.svolta.t;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  // vista grande: la ragnatela cosmica (o il plasma), con stelle, buchi neri, bolle ionizzate e quasar
+  function disegnaGrande(t, a, T, D, z, contrazione, leg) {
+    const cx = W / 2, cy = H / 2 - 30;
 
     // bagliore della radiazione di fondo dopo che l'universo è diventato trasparente
     if (T < 3400 && T > 15) {
@@ -229,7 +263,7 @@
     }
 
     // la ragnatela cosmica
-    const lato = Math.min(W, H) * 0.82, sv = Uni.comovente ? 1 : Math.max(0.02, Math.cbrt(a)), Lp = lato * sv;
+    const lato = Math.min(W, H) * 0.82, sv = Uni.comovente ? 1 : Math.max(0.4, Math.cbrt(a)), Lp = lato * sv;
     if (T < 6000) {
       const nx = Math.ceil((W / 2) / Lp + 0.5), ny = Math.ceil((H / 2) / Lp + 0.5), piastre = (2 * nx + 1) * (2 * ny + 1);
       const salto = Math.max(1, Math.ceil(piastre * N / 45000));
@@ -246,22 +280,41 @@
         let x = c.qx[i] + De * c.px[i], y = c.qy[i] + De * c.py[i];
         x -= Math.floor(x); y -= Math.floor(y);
         const gal = sf * Math.max(0, Math.min(1, (rho - 4) / 10)) * spegn;
-        const gas = Math.min(0.5, 0.06 + 0.05 * rho) * nebbia;
+        const gas = Math.min(0.6, 0.12 + 0.07 * rho) * nebbia;
         let col, al, d;
+        let forma = 0;
         if (gal > 0.05) {
           const s = c.sem[i];
           const r = 255, g = 225 + 25 * (1 - giallo) - 60 * rosso - s * 20, b = 200 + 55 * (1 - giallo) * (1 - s) - 150 * rosso;
           col = `${r},${Math.round(g)},${Math.round(Math.max(40, b))}`; al = Math.min(1, 0.25 + gal); d = 1.4 + gal * 1.4;
+          if (gal > 0.45 && s < 0.3) forma = 1 + s * 30;          // le più dense si vedono come piccole galassie
         } else { col = '130,150,230'; al = gas; d = 1.3; }
         if (al < 0.02) continue;
         ctx.fillStyle = `rgba(${col},${al})`;
         for (let ix = -nx; ix <= nx; ix++) for (let iy = -ny; iy <= ny; iy++) {
           const sx = cx + (ix + x - 0.5) * Lp, sy = cy + (iy + y - 0.5) * Lp;
           if (sx < -3 || sy < -3 || sx > W + 3 || sy > H + 3) continue;
-          ctx.fillRect(sx - d / 2, sy - d / 2, d, d);
+          if (forma) { ctx.beginPath(); ctx.ellipse(sx, sy, d * 1.5, d * 0.6, forma, 0, 7); ctx.fill(); }
+          else ctx.fillRect(sx - d / 2, sy - d / 2, d, d);
         }
       }
       ctx.globalCompositeOperation = 'source-over';
+      if (T < 2600) leg.push('web');
+      if (sf > 0.05 && spegn > 0.1) leg.push('gal');
+
+      // posizione attuale di un elemento della ragnatela, ripetuta sulle piastrelle visibili
+      const tessere = (i, fn) => {
+        const De = Math.min(D, 0.985 * c.dc[i]);
+        let x = c.qx[i] + De * c.px[i], y = c.qy[i] + De * c.py[i]; x -= Math.floor(x); y -= Math.floor(y);
+        for (let ix = -nx; ix <= nx; ix++) for (let iy = -ny; iy <= ny; iy++) {
+          const sx = cx + (ix + x - 0.5) * Lp, sy = cy + (iy + y - 0.5) * Lp;
+          if (sx < -40 || sy < -40 || sx > W + 40 || sy > H + 40) continue;
+          const h = Math.sin(i * 12.9898 + ix * 78.233 + iy * 37.719) * 43758.5453;
+          fn(sx, sy, !ix && !iy, h - Math.floor(h));        // h: per non ripetere uguale ogni oggetto su tutte le piastrelle
+        }
+      };
+      if (!contrazione) disegnaPrimiOggetti(t, z, Lp, tessere, leg);
+      if (T > 1700 && T < 2600) testo('Le macchie chiare e scure: la radiazione di fondo, i semi delle galassie', cx, 26, 'center');
 
       // la futura Via Lattea
       if (t > 1.5 * GA && !contrazione && (!tab.t0 || t < tab.t0 + 60 * GA)) {
@@ -320,22 +373,467 @@
       }
       ctx.globalAlpha = 1;
     }
-    // inflazione e primissimi istanti: il punto che si gonfia
-    if (t < 1e-30) {
-      const f = Math.max(0, (Math.log10(t) + 36) / 6), r = 4 + f * Math.max(W, H);
-      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-      const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-      gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.6, 'rgba(255,250,235,0.95)'); gr.addColorStop(1, 'rgba(255,240,220,0)');
-      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
-    }
-
     // dimensione della regione mostrata
     ctx.font = '12px system-ui, sans-serif'; ctx.fillStyle = T > 2000 ? 'rgba(40,20,0,0.85)' : 'rgba(220,230,255,0.85)';
     if (T < 6000 && !Uni.comovente) {
       const lato0 = 1.3e9 * a;
       ctx.fillText(`Il quadrato centrale misura ${lato0 >= 1e9 ? fmt.numero(lato0 / 1e9, 2) + ' miliardi' : fmt.numero(lato0 / 1e6, 2) + ' milioni'} di anni luce`, 16, H - 150);
     }
-    return { t, a, T, z, D };
+  }
+
+  // testo leggibile su qualunque sfondo
+  function testo(s, x, y, al, dim) {
+    ctx.font = (dim || 12) + 'px system-ui, sans-serif'; ctx.textAlign = al || 'left';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText(s, x, y);
+    ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fillText(s, x, y);
+    ctx.textAlign = 'left';
+  }
+  const bagliore = (x, y, r, col, al) => {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(255,255,255,${al})`); g.addColorStop(0.25, `rgba(${col},${al * 0.8})`); g.addColorStop(1, `rgba(${col},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+  };
+
+  /* ---------- Prime stelle, supernove, buchi neri, reionizzazione, quasar ---------- */
+  let cBolle = null;
+  function disegnaPrimiOggetti(t, z, Lp, tessere, leg) {
+    // bolle di gas ionizzato: disegnate piene su un foglio a parte, così dove si sovrappongono si fondono
+    const aB = 0.24 * (1 - lin(z, 6, 4));
+    if (aB > 0.01 && t > nodi.bolle[0].t) {
+      if (!cBolle || cBolle.width !== canvas.width || cBolle.height !== canvas.height) { cBolle = document.createElement('canvas'); cBolle.width = canvas.width; cBolle.height = canvas.height; }
+      const b = cBolle.getContext('2d');
+      b.setTransform(1, 0, 0, 1, 0, 0); b.clearRect(0, 0, cBolle.width, cBolle.height); b.setTransform(dpr, 0, 0, dpr, 0, 0);
+      b.fillStyle = 'rgb(140,95,255)';
+      for (const o of nodi.bolle) {
+        if (t <= o.t) continue;
+        const r = o.R * Lp * Math.pow(lin(t, o.t, nodi.z6), 0.6) * (1 + 0.8 * lin(t, nodi.z6, nodi.z6 * 1.6));
+        if (r > 0.5) tessere(o.i, (x, y) => { b.beginPath(); b.arc(x, y, r, 0, 7); b.fill(); });
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = aB; ctx.drawImage(cBolle, 0, 0); ctx.globalAlpha = 1; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      leg.push('bub', 'uv');
+    }
+    // prime stelle: si accendono, esplodono e lasciano un buco nero (durate allungate per poterle vedere)
+    const vBH = 1 - lin(z, 3, 1.5);
+    let etStella = null, etBuco = null, st = false, sn = false, bh = false;
+    for (const p of nodi.pop) {
+      const du = Uni.u - uDaT(p.t);
+      if (du < 0) continue;
+      tessere(p.i, (x, y, centro, h) => {
+        if (!centro && h < 0.55) return;
+        if (du < 0.006) {
+          const f = Math.min(1, du / 0.001), r = 9 * f;
+          bagliore(x, y, r + 6, '150,190,255', 0.95);
+          ctx.strokeStyle = `rgba(200,225,255,${0.7 * f})`; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(x - r - 5, y); ctx.lineTo(x + r + 5, y); ctx.moveTo(x, y - r - 5); ctx.lineTo(x, y + r + 5); ctx.stroke();
+          st = true; if (centro && !etStella) etStella = [x, y];
+        } else if (du < 0.0095) {
+          const f = (du - 0.006) / 0.0035;
+          bagliore(x, y, 6 + 10 * (1 - f), '255,190,120', 1 - f);
+          ctx.strokeStyle = `rgba(255,180,110,${0.9 * (1 - f)})`; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(x, y, 4 + 22 * f, 0, 7); ctx.stroke();
+          sn = true;
+        } else if (vBH > 0.02) {
+          ctx.fillStyle = `rgba(0,0,0,${vBH})`; ctx.strokeStyle = `rgba(255,150,60,${0.6 * vBH})`; ctx.lineWidth = 1.1;
+          ctx.beginPath(); ctx.arc(x, y, 2.2, 0, 7); ctx.fill(); ctx.stroke();
+          bh = true; if (centro && p.r < 6 && !etBuco) etBuco = [x, y];
+        }
+      });
+    }
+    if (st) leg.push('st'); if (sn) leg.push('sn'); if (bh) leg.push('bh');
+    if (etStella) testo('una delle prime stelle', etStella[0] + 14, etStella[1] - 8);
+    else if (etBuco && z > 6) testo('un primo buco nero', etBuco[0] + 10, etBuco[1] - 6);
+    // quasar: i buchi neri dei picchi più densi crescono e divorano gas, soprattutto intorno a z = 2-3
+    let etQ = null, qMax = 0;
+    for (let k = 0; k < 6; k++) {
+      const i = campo.picchi[k], amp = 0.45 + 0.55 * campo.sem[i], q = z < 7 ? amp * Math.exp(-(((z - 2.4) / 1.7) ** 2)) : 0;
+      if (q < 0.05) continue;
+      const an = campo.sem[i] * 9;
+      tessere(i, (x, y, centro, h) => {
+        if (!centro && h < 0.7) return;
+        bagliore(x, y, 3 + 7 * q, '170,200,255', Math.min(1, 0.4 + q));
+        ctx.strokeStyle = `rgba(160,210,255,${0.85 * q})`; ctx.lineWidth = 1.3;
+        const l = 6 + 16 * q;
+        ctx.beginPath(); ctx.moveTo(x - Math.cos(an) * l, y - Math.sin(an) * l); ctx.lineTo(x + Math.cos(an) * l, y + Math.sin(an) * l); ctx.stroke();
+        if (centro && q > qMax) { qMax = q; etQ = [x, y]; }
+      });
+    }
+    if (etQ) { leg.push('qso'); if (qMax > 0.25) testo('quasar', etQ[0] + 12, etQ[1] + 16); }
+  }
+
+  /* ---------- Scena microscopica: dalle particelle ai primi atomi ----------
+     Vista ingrandita e schematica (numeri, dimensioni e velocità non in scala). Chi c'è e com'è legato dipende solo
+     dalla temperatura, quindi funziona anche all'indietro; il movimento è un'animazione indipendente dal tempo cosmico. */
+  const lin = (x, a, b) => Math.max(0, Math.min(1, (x - a) / (b - a)));
+  const liscio = x => x * x * (3 - 2 * x);
+  const NG = 6, NCOP = 36, QCOL = ['255,90,90', '90,240,120', '90,140,255'];
+  let micro = null, orologio = 0;
+  function creaMicro() {
+    let s = 7771;
+    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    const mobile = v => { const a = rnd() * 6.283; return { x: rnd(), y: rnd(), vx: Math.cos(a) * v, vy: Math.sin(a) * v, px: 0, py: 0 }; };
+    const m = { nuc: [], ele: [], fot: [], nu: [], lampi: [], xe: 1 };
+    // ogni gruppo di 16 nucleoni: 0-1 protoni dell'elio, 2-3 neutroni dell'elio, 4-9 neutroni che decadono in protoni, 10-15 protoni
+    for (let g = 0; g < NG; g++) for (let k = 0; k < 16; k++) {
+      const b = mobile(1); b.g = g; b.k = k; b.j = rnd(); b.fase = rnd() * 6.283; b.q = [0, 1, 2].map(() => mobile(1.6));
+      m.nuc.push(b);
+    }
+    // un elettrone per ogni protone finale
+    for (const b of m.nuc) if (b.k <= 1 || b.k >= 4) {
+      const e = mobile(3); e.n = b; e.j = rnd(); e.fase = rnd() * 6.283; e.he = b.k <= 1 ? b.k + 1 : 0;
+      m.ele.push(e);
+    }
+    for (let i = 0; i < 70; i++) { const f = mobile(1); f.coda = []; f.attesa = 0; f.uv = i < 26; m.fot.push(f); }
+    for (let i = 0; i < 22; i++) m.nu.push(mobile(1));
+    m.cop = Array.from({ length: NCOP }, (_, k) => ({ k, o: rnd() * 10, per: 1.2 + rnd() * 0.8 }));
+    return m;
+  }
+  function composizione(T, z, contrazione) {
+    const L = Math.log10(T);
+    return {
+      L, T,
+      copQ: 1 - lin(L, 12.3, 11.7), copE: 1 - lin(L, 10, 9.4),               // coppie quark-antiquark, elettrone-positrone
+      nfr: L >= 10.6 ? 0.5 : L >= 10 ? 0.5 - 0.34 * lin(L, 10.6, 10) : 0.16 - 0.035 * lin(L, 10, 9),   // neutroni / nucleoni
+      nuc: lin(L, 9, 8.72),                                                    // nucleosintesi
+      reion: contrazione ? 1 : lin(z, 14, 6), he2: contrazione ? 1 : lin(z, 4, 2.8),
+      uv: contrazione ? 0 : Math.sin(Math.PI * lin(z, 20, 5))
+    };
+  }
+  function legame(e, C) {
+    const T = C.T;
+    let b;
+    if (e.he === 1) b = lin(T, 16000, 12000) * (1 - C.he2);
+    else if (e.he === 2) b = lin(T, 7500, 5500) * (1 - lin(C.reion, e.j * 0.8, e.j * 0.8 + 0.2));
+    else { const Tb = 2750 + 900 * e.j; b = lin(T, Tb + 200, Tb - 200) * (1 - lin(C.reion, e.j * 0.8, e.j * 0.8 + 0.2)); }
+    return liscio(b);
+  }
+  const D_HE = 0.0075;
+  function aggiornaMicro(dt, C) {
+    const m = micro, L = C.L, vv = 0.012 * (0.3 + 0.7 * lin(L, 3, 11));
+    orologio += dt;
+    const mv = (p, v) => { p.x = ((p.x + p.vx * v * dt) % 1 + 1) % 1; p.y = ((p.y + p.vy * v * dt) % 1 + 1) % 1; };
+    const verso = (p, tx, ty, w) => {
+      if (w <= 0) return;
+      let dx = tx - p.px, dy = ty - p.py; dx -= Math.round(dx); dy -= Math.round(dy);
+      p.px = ((p.px + dx * w) % 1 + 1) % 1; p.py = ((p.py + dy * w) % 1 + 1) % 1;
+    };
+    for (const b of m.nuc) {
+      mv(b, vv); b.px = b.x; b.py = b.y;
+      b.conf = liscio(lin(L, 12.5 - 0.3 * b.j, 12.15 - 0.3 * b.j));
+      const c = b.k - 4;
+      b.neutro = b.k === 2 || b.k === 3 ? 1 : c >= 0 && c < 6 ? liscio(lin(16 * C.nfr - 2 - c, 0.2, 0.8)) : 0;
+    }
+    // nucleosintesi: protone + neutrone = deuterio, poi deuterio + deuterio = elio
+    const wD = liscio(lin(C.nuc, 0, 0.5)), wHe = liscio(lin(C.nuc, 0.45, 1)), d = D_HE;
+    for (let g = 0; g < NG; g++) {
+      const [p0, p1, n2, n3] = m.nuc.slice(g * 16, g * 16 + 4);
+      verso(n2, p0.x + d, p0.y, wD); verso(n3, p1.x + d, p1.y, wD);
+      verso(p1, p0.x, p0.y + d, wHe); verso(n3, p0.x + d, p0.y + d, wHe);
+    }
+    for (const b of m.nuc) b.q.forEach((q, i) => {
+      mv(q, vv * 1.6); q.px = q.x; q.py = q.y;
+      const an = b.fase + orologio * 2.5 + i * 2.094;
+      verso(q, b.px + 0.0026 * Math.cos(an), b.py + 0.0026 * Math.sin(an), b.conf);
+    });
+    // elettroni: liberi o in orbita attorno al loro nucleo
+    let liberi = 0, tot = 0;
+    for (const e of m.ele) {
+      mv(e, vv * 2.2); e.px = e.x; e.py = e.y;
+      e.vis = 1 - e.n.neutro; e.b = legame(e, C);
+      const p0 = m.nuc[e.n.g * 16];
+      e.nx = e.he ? p0.px + d / 2 : e.n.px; e.ny = e.he ? p0.py + d / 2 : e.n.py; e.ro = e.he ? 0.0095 : 0.012;
+      const an = e.fase + orologio * 2.2 + (e.he === 2 ? Math.PI : 0);
+      verso(e, e.nx + e.ro * Math.cos(an), e.ny + e.ro * Math.sin(an), e.b);
+      if (e.vis > 0.5) { tot++; if (e.b < 0.5) liberi++; }
+    }
+    m.xe = tot ? liberi / tot : 0;
+    // fotoni: viaggiano sempre alla stessa velocità; finché ci sono elettroni liberi vengono deviati (diffusione Thomson)
+    const R = 0.016;
+    for (const f of m.fot) {
+      const x0 = f.x, y0 = f.y; mv(f, 0.09);
+      f.coda.push(x0, y0); if (f.coda.length > 24) f.coda.splice(0, 2);
+      if ((f.attesa -= dt) > 0) continue;
+      let u = null;
+      if (m.xe > 0.01) for (const e of m.ele) {
+        if (e.vis < 0.5 || e.b > 0.5) continue;
+        let dx = e.px - f.x, dy = e.py - f.y; dx -= Math.round(dx); dy -= Math.round(dy);
+        if (dx * dx + dy * dy < R * R) { u = e; break; }
+      }
+      if (!u && L > 5 && Math.random() < dt * 3) u = { px: f.x, py: f.y };   // nel plasma caldissimo gli urti sono continui
+      if (u) {
+        const an = Math.random() * 6.283; f.vx = Math.cos(an); f.vy = Math.sin(an); f.attesa = 0.12;
+        if (m.lampi.length < 60) m.lampi.push({ x: u.px, y: u.py, v: 0.3 });
+      }
+    }
+    for (const n of m.nu) {
+      mv(n, 0.085);
+      if (L > 10 && Math.random() < dt * 4) { const an = Math.random() * 6.283; n.vx = Math.cos(an); n.vy = Math.sin(an); }
+    }
+    for (const l of m.lampi) l.v -= dt;
+    m.lampi = m.lampi.filter(l => l.v > 0);
+  }
+
+  // zig-zag tra due punti (gluoni e fotoni)
+  function onda(x1, y1, x2, y2, amp, n) {
+    const dx = x2 - x1, dy = y2 - y1, l = Math.hypot(dx, dy) || 1, ux = -dy / l, uy = dx / l;
+    ctx.moveTo(x1, y1);
+    for (let i = 1; i <= n; i++) { const f = i / n, o = i < n ? (i % 2 ? amp : -amp) : 0; ctx.lineTo(x1 + dx * f + ux * o, y1 + dy * f + uy * o); }
+  }
+
+  function disegnaMicro(V, C, leg) {
+    const m = micro, S = V.S, ox = V.x - S / 2, oy = V.y - S / 2, L = C.L, T = C.T;
+    const X = x => ox + x * S, Y = y => oy + y * S;
+    const dentro = (x, y) => (x - V.x) ** 2 + (y - V.y) ** 2 < (V.r + 12) ** 2;
+    const rN = Math.max(1.4, 0.0042 * S), rE = Math.max(1.1, 0.002 * S), rQ = Math.max(1, 0.0021 * S);
+    const vedoQuark = m.nuc.some(b => b.conf < 0.98), quarkDentro = L > 9.6 && rN > 3;
+    // gluoni tra quark vicini
+    if (vedoQuark || quarkDentro) {
+      ctx.strokeStyle = 'rgba(255,215,90,0.55)'; ctx.lineWidth = 1; ctx.beginPath();
+      m.nuc.forEach((b, ib) => {
+        if (b.conf >= 0.98 && !quarkDentro) return;
+        const vicino = m.nuc[(ib + 1) % m.nuc.length];
+        for (let i = 0; i < 4; i++) {
+          // tra i quark dello stesso nucleone e, finché sono liberi, anche con quelli di un altro
+          const q1 = b.q[i % 3], q2 = i < 3 ? b.q[(i + 1) % 3] : vicino.q[ib % 3];
+          if (i === 3 && b.conf > 0.5) continue;
+          let dx = q2.px - q1.px, dy = q2.py - q1.py; dx -= Math.round(dx); dy -= Math.round(dy);
+          if (dx * dx + dy * dy > 0.01) continue;
+          const x1 = X(q1.px), y1 = Y(q1.py);
+          if (dentro(x1, y1)) onda(x1, y1, x1 + dx * S, y1 + dy * S, Math.max(1, rQ * 0.5), 6);
+        }
+      });
+      ctx.stroke();
+      leg.push('g');
+    }
+    // coppie particella-antiparticella che nascono dalla luce e si annichilano
+    let cq = false, ce = false;
+    for (const c of m.cop) {
+      const isQ = c.k < NCOP / 2, A = isQ ? C.copQ : C.copE;
+      if (c.k % (NCOP / 2) >= A * NCOP / 2) continue;
+      const ph = (orologio + c.o) / c.per, ciclo = Math.floor(ph), f = ph - ciclo;
+      const h = n => { const s = Math.sin(c.k * 12.9898 + ciclo * 78.233 + n * 37.719) * 43758.5453; return s - Math.floor(s); };
+      const x = X(h(1)), y = Y(h(2)), an = h(3) * 6.283, sep = 0.011 * S * Math.sin(Math.PI * f);
+      if (!dentro(x, y)) continue;
+      const c1 = isQ ? QCOL[c.k % 3] : '79,210,255', c2 = isQ ? QCOL[c.k % 3] : '255,120,210', r = isQ ? rQ * 1.3 : rE * 1.2;
+      if (f > 0.06 && f < 0.94) {
+        ctx.fillStyle = `rgb(${c1})`; ctx.beginPath(); ctx.arc(x + Math.cos(an) * sep, y + Math.sin(an) * sep, r, 0, 7); ctx.fill();
+        ctx.strokeStyle = `rgb(${c2})`; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(x - Math.cos(an) * sep, y - Math.sin(an) * sep, r, 0, 7); ctx.stroke();
+      }
+      if (f < 0.1 || f > 0.9) { const v = f < 0.1 ? 1 - f / 0.1 : (f - 0.9) / 0.1; bagliore(x, y, 3 + 9 * v, '255,250,220', v); }
+      if (isQ) cq = true; else ce = true;
+    }
+    if (cq) leg.push('aq'); if (ce) leg.push('ep');
+    // nucleoni
+    let np = false, nn = false;
+    for (const b of m.nuc) {
+      if (b.conf < 0.03) continue;
+      const x = X(b.px), y = Y(b.py);
+      if (!dentro(x, y)) continue;
+      const w = b.neutro, r = Math.round(255 - 50 * w), g = Math.round(95 + 120 * w), bl = Math.round(80 + 150 * w);
+      ctx.fillStyle = `rgba(${r},${g},${bl},${b.conf})`; ctx.beginPath(); ctx.arc(x, y, rN, 0, 7); ctx.fill();
+      if (b.k > 3 || C.nuc < 0.5) { if (w > 0.5) nn = true; else np = true; }   // quelli dell'elio contano come nucleo di elio
+    }
+    // quark: liberi, oppure (finché fa molto caldo) visibili dentro i nucleoni
+    if (vedoQuark || quarkDentro) {
+      for (const b of m.nuc) {
+        if (b.conf >= 0.98 && !quarkDentro) continue;
+        b.q.forEach((q, i) => {
+          const x = X(q.px), y = Y(q.py);
+          if (!dentro(x, y)) return;
+          ctx.fillStyle = `rgb(${QCOL[i]})`; ctx.beginPath(); ctx.arc(x, y, b.conf > 0.9 ? rQ * 0.75 : rQ, 0, 7); ctx.fill();
+        });
+      }
+      leg.push('q');
+    }
+    // elettroni (con l'orbita, quando sono legati a un nucleo)
+    let ne = false, atH = false, atHe = false;
+    for (const e of m.ele) {
+      if (e.vis < 0.05) continue;
+      const x = X(e.px), y = Y(e.py);
+      if (e.b > 0.3) {
+        const nx = X(e.nx), ny = Y(e.ny);
+        if (dentro(nx, ny)) { ctx.strokeStyle = `rgba(79,210,255,${0.28 * e.b})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(nx, ny, e.ro * S, 0, 7); ctx.stroke(); }
+        if (e.b > 0.6) { if (e.he) atHe = true; else atH = true; }
+      }
+      if (!dentro(x, y)) continue;
+      ctx.fillStyle = `rgba(79,210,255,${e.vis})`; ctx.beginPath(); ctx.arc(x, y, rE, 0, 7); ctx.fill();
+      if (e.b < 0.6) ne = true;
+    }
+    // fotoni, con la scia che mostra il percorso a zig-zag
+    const colF = T > 40000 ? '235,240,255' : T > 1300 ? coloreTemp(T).join(',') : '255,90,60', aF = T > 1300 ? 0.95 : T > 40 ? 0.55 : 0.3;
+    const lf = Math.max(6, 0.012 * S), lam = 2 + 2.2 * Math.max(0, Math.log10(1e5 / T));
+    for (const f of m.fot) {
+      const uv = f.uv && C.uv > 0.05, col = uv ? '200,130,255' : colF, al = uv ? C.uv : aF;
+      const x = X(f.x), y = Y(f.y);
+      if (!dentro(x, y)) continue;
+      ctx.strokeStyle = `rgba(${col},${al * 0.35})`; ctx.lineWidth = 1; ctx.beginPath();
+      let px = x, py = y;
+      for (let i = f.coda.length - 2; i >= 0; i -= 2) {
+        const qx = X(f.coda[i]), qy = Y(f.coda[i + 1]);
+        if (Math.abs(qx - px) > S / 3 || Math.abs(qy - py) > S / 3) break;
+        ctx.moveTo(px, py); ctx.lineTo(qx, qy); px = qx; py = qy;
+      }
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(${col},${al})`; ctx.lineWidth = 1.4; ctx.beginPath();
+      onda(x - f.vx * lf, y - f.vy * lf, x, y, 1.6, Math.max(2, Math.min(10, Math.round(lf / lam))));
+      ctx.stroke();
+    }
+    leg.push('f'); if (C.uv > 0.05) leg.push('uv');
+    // neutrini
+    ctx.fillStyle = 'rgba(200,200,200,0.55)';
+    for (const n of m.nu) { const x = X(n.x), y = Y(n.y); if (dentro(x, y)) ctx.fillRect(x - 1, y - 1, 2, 2); }
+    if (T > 1e8) leg.push('nu');
+    // lampi degli urti
+    for (const l of m.lampi) {
+      const x = X(l.x), y = Y(l.y);
+      if (!dentro(x, y)) continue;
+      ctx.strokeStyle = `rgba(255,250,210,${Math.min(1, l.v * 3)})`; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x, y, 2 + (1 - l.v / 0.3) * 8, 0, 7); ctx.stroke();
+    }
+    if (np) leg.push('p'); if (nn) leg.push('n'); if (ne) leg.push('e');
+    if (C.nuc > 0 && C.nuc < 0.6) leg.push('d');
+    if (C.nuc > 0.5 && !atHe) leg.push('he');
+    if (atH) leg.push('H'); if (atHe) leg.push('He');
+    // un'etichetta sull'oggetto più vicino al centro
+    if (V.r > 250) {
+      let et = null, dm = Infinity;
+      const prova = (x, y, s) => { const dd = (x - V.x) ** 2 + (y - V.y) ** 2; if (dd < dm) { dm = dd; et = [x, y, s]; } };
+      if (C.nuc > 0.7 && T > 2700) for (let g = 0; g < NG; g++) { const p0 = m.nuc[g * 16]; prova(X(p0.px + D_HE / 2), Y(p0.py + D_HE / 2), atHe ? 'atomo di elio' : 'nucleo di elio'); }
+      else if (T <= 2700 || atH) for (const e of m.ele) if (!e.he && e.b > 0.8) prova(X(e.nx), Y(e.ny), 'atomo di idrogeno');
+      if (et) testo(et[2], et[0] + 16, et[1] - 12);
+    }
+  }
+
+  /* ---------- Lente sul Gruppo Locale: le galassie si fondono, gli altri gruppi si allontanano ---------- */
+  const GRUPPO = (() => {
+    let s = 4242;
+    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    return {
+      piccole: Array.from({ length: 16 }, (_, i) => ({ ospite: i >= 13 ? 0 : i % 2, ang: rnd() * 6.283, d: 0.25 + 0.4 * rnd(), tm: i < 13 ? 1.4 + 3.6 * rnd() : 5.5 + 5 * rnd(), m: 0.3 + 0.7 * rnd() })),
+      lontane: Array.from({ length: 14 }, () => ({ ang: rnd() * 6.283, d: 0.3 + 0.35 * rnd(), rot: rnd() * 3, spirale: rnd() < 0.6 }))
+    };
+  })();
+  function galassia(x, y, R, ang, tipo, al) {
+    if (R < 0.8 || al <= 0.01) return;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.globalAlpha *= al;
+    let g;
+    if (tipo === 'ellittica') {
+      ctx.scale(1, 0.7);
+      g = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+      g.addColorStop(0, 'rgba(255,240,215,1)'); g.addColorStop(0.3, 'rgba(255,215,170,0.6)'); g.addColorStop(1, 'rgba(255,190,140,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fill();
+    } else if (tipo === 'irregolare') {
+      g = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+      g.addColorStop(0, 'rgba(225,235,255,1)'); g.addColorStop(1, 'rgba(140,170,255,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fill();
+    } else {
+      ctx.scale(1, 0.5);
+      g = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+      g.addColorStop(0, 'rgba(255,245,220,1)'); g.addColorStop(0.18, 'rgba(255,225,180,0.8)'); g.addColorStop(0.4, 'rgba(150,180,255,0.35)'); g.addColorStop(1, 'rgba(120,150,255,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(200,220,255,0.6)'; ctx.lineWidth = Math.max(0.8, R * 0.09);
+      for (let k = 0; k < 2; k++) {
+        ctx.beginPath();
+        for (let s = 0; s <= 1.001; s += 0.1) { const th = k * Math.PI + s * 3.3, ro = R * (0.12 + 0.8 * s); ctx[s ? 'lineTo' : 'moveTo'](ro * Math.cos(th), ro * Math.sin(th)); }
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+  function disegnaGruppo(V, t, a, leg) {
+    const r = V.r, tt = t / GA, t0 = tab.t0 / GA, tf = t0 + 4.5;
+    // le galassie degli altri gruppi seguono l'espansione
+    const sc = a / 0.6;
+    for (const g of GRUPPO.lontane) {
+      const dd = g.d * sc, al = lin(tt, 1.2, 2) * (1 - lin(dd, 0.85, 1.1));
+      if (al > 0.02) galassia(V.x + Math.cos(g.ang) * dd * r, V.y + Math.sin(g.ang) * dd * r, r * 0.045, g.rot, g.spirale ? 'spirale' : 'ellittica', al * 0.8);
+    }
+    // distanza tra Via Lattea e Andromeda: si allontanano con l'espansione, poi la gravità le riavvicina
+    let d;
+    if (tt < 5) d = 0.55 + 0.85 * Math.pow(lin(tt, 1, 5), 0.6);
+    else if (tt < t0) d = 1.4 - 0.5 * liscio(lin(tt, 5, t0));
+    else d = 0.9 * Math.pow(1 - lin(tt, t0, tf), 0.7);
+    const fusa = lin(tt, tf - 0.2, tf + 1), ux = 0.88, uy = -0.47;
+    const pos = [{ x: V.x - ux * d / 2 * r, y: V.y - uy * d / 2 * r }, { x: V.x + ux * d / 2 * r, y: V.y + uy * d / 2 * r }];
+    const massa = [1, 1];
+    for (const p of GRUPPO.piccole) {
+      const o = pos[p.ospite];
+      if (tt >= p.tm) {
+        massa[p.ospite] += p.m;
+        if (tt < p.tm + 0.3) { const v = 1 - (tt - p.tm) / 0.3; ctx.strokeStyle = `rgba(255,230,180,${v})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(o.x, o.y, r * (0.08 + 0.12 * (1 - v)), 0, 7); ctx.stroke(); }
+        continue;
+      }
+      const al = lin(tt, 0.9, 1.4), f = lin(tt, 0.9, p.tm), dd = p.d * r * Math.pow(1 - f, 1.1), an = p.ang + 5 * f;
+      galassia(o.x + Math.cos(an) * dd, o.y + Math.sin(an) * dd * 0.8, r * 0.035 * Math.sqrt(p.m), an, 'irregolare', al);
+    }
+    const tipo = tt < 2.5 ? 'irregolare' : 'spirale', al0 = lin(tt, 0.8, 1.3);
+    if (fusa < 1) {
+      galassia(pos[0].x, pos[0].y, r * 0.055 * Math.sqrt(massa[0]), 0.5 + orologio * 0.25, tipo, al0 * (1 - fusa));
+      galassia(pos[1].x, pos[1].y, r * 0.05 * Math.sqrt(massa[1]), 2.2 - orologio * 0.2, tipo, al0 * (1 - fusa));
+    }
+    if (fusa > 0) galassia(V.x, V.y, r * 0.3, 0.4, 'ellittica', fusa);
+    leg.push('gal');
+    if (V.r > 60) {
+      if (tt > 2.5 && fusa < 0.5) {
+        testo('Via Lattea', pos[0].x, pos[0].y + r * 0.2 + 10, 'center', 11);
+        testo('Andromeda', pos[1].x, pos[1].y - r * 0.15 - 4, 'center', 11);
+      } else if (fusa >= 0.5) testo('Via Lattea + Andromeda', V.x, V.y + r * 0.3 + 12, 'center', 11);
+    }
+  }
+
+  function posLente() {
+    const cr = canvas.getBoundingClientRect();
+    let fondo = dom.linea.getBoundingClientRect().top - cr.top;
+    const er = dom.epoca.getBoundingClientRect();
+    if (er.bottom - cr.top > H * 0.6) fondo = Math.min(fondo, er.top - cr.top);   // pannello dell'epoca in basso (telefono)
+    const r = Math.max(50, Math.min(140, Math.min(W, H) * 0.17)) * (Uni.lenteGrande ? 1.7 : 1);
+    return { x: W - r - 16, y: Math.max(r + 30, fondo - r - 14), r };
+  }
+
+  // la lente: a tutto schermo nel plasma primordiale, poi si rimpicciolisce in un angolo
+  function disegnaLente(k, t, a, z, C, contrazione, dt, leg) {
+    const P = posLente(), Sg = Math.max(W, H) * 1.08;
+    const V = {
+      x: W / 2 + (P.x - W / 2) * k, y: H / 2 + (P.y - H / 2) * k,
+      r: Math.hypot(W, H) / 2 + 20 + (P.r - Math.hypot(W, H) / 2 - 20) * k,
+      S: Sg + (P.r * 2 / 0.4 - Sg) * k
+    };
+    Uni.lente = k > 0.99 ? P : null;
+    const wG = tab.t0 && !contrazione ? lin(t / GA, 1, 1.6) : 0;
+    ctx.save(); ctx.beginPath(); ctx.arc(V.x, V.y, V.r, 0, 7); ctx.clip();
+    ctx.fillStyle = '#04050c'; ctx.fillRect(V.x - V.r, V.y - V.r, 2 * V.r, 2 * V.r);
+    const T = C.T, lum = T > 2600 ? 0.15 : 0.15 * lin(T, 1500, 2600);
+    if (lum > 0) {
+      const c = T > 40000 ? [205, 215, 255] : coloreTemp(T), g = ctx.createRadialGradient(V.x, V.y, 0, V.x, V.y, V.r);
+      g.addColorStop(0, `rgba(${c},${lum * 1.3})`); g.addColorStop(1, `rgba(${c},${lum * 0.6})`);
+      ctx.fillStyle = g; ctx.fillRect(V.x - V.r, V.y - V.r, 2 * V.r, 2 * V.r);
+    }
+    if (wG < 1) { aggiornaMicro(dt, C); ctx.globalAlpha = 1 - wG; disegnaMicro(V, C, wG > 0.5 ? [] : leg); }
+    if (wG > 0) { ctx.globalAlpha = wG; disegnaGruppo(V, t, a, wG > 0.5 ? leg : []); }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    if (k > 0.5) {
+      ctx.strokeStyle = 'rgba(200,215,255,0.65)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(V.x, V.y, V.r, 0, 7); ctx.stroke();
+      testo(wG > 0.5 ? 'Lente: il nostro Gruppo Locale' : 'Lente: il gas tra le galassie', V.x, V.y - V.r - 8, 'center');
+    } else testo('Vista ingrandita e schematica: dimensioni, numeri e velocità non sono in scala', W / 2, 22, 'center');
+  }
+
+  function disegna(dt) {
+    const t = tDaU(Uni.u), a = aDaT(t), T = T0K / a, D = crescita(t), z = 1 / a - 1, contrazione = tab.svolta && t > tab.svolta.t;
+    const C = composizione(T, z, contrazione), leg = [];
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    const k = liscio(lin(T, 2600, 1700));                  // 0: lente a tutto schermo, 1: lente piccola
+    if (k > 0) disegnaGrande(t, a, T, D, z, contrazione, leg);
+    if (t >= 1e-32) disegnaLente(k, t, a, z, C, contrazione, dt, leg);
+    // inflazione: il punto che si gonfia
+    if (t < 1e-30) {
+      const cx = W / 2, cy = H / 2, f = Math.max(0, (Math.log10(t) + 36) / 6), r = 4 + f * Math.max(W, H);
+      if (t < 1e-32) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
+      const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.6, 'rgba(255,250,235,0.95)'); gr.addColorStop(1, 'rgba(255,240,220,0)');
+      ctx.globalAlpha = t < 1e-32 ? 1 : 1 - lin(Math.log10(t), -32, -30); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    return { t, a, T, z, D, C, leg };
   }
 
   function disegnaScala(t) {
@@ -360,6 +858,29 @@
   }
 
   /* ---------- Interfaccia ---------- */
+  const LEGENDA = {
+    q: ['quark', 'background:conic-gradient(#ff5a5a 0 33%,#5af078 0 66%,#5a8cff 0)'],
+    g: ['gluone', 'width:12px;height:3px;border-radius:1px;background:#ffd75a'],
+    aq: ['antiquark', 'background:none;border:2px solid #ff5a5a'],
+    p: ['protone', 'background:#ff5f50'],
+    n: ['neutrone', 'background:#cdd7e6'],
+    d: ['deuterio (protone + neutrone)', 'width:14px;border-radius:5px;background:linear-gradient(90deg,#ff5f50 50%,#cdd7e6 0)'],
+    he: ['nucleo di elio', 'background:conic-gradient(#ff5f50 0 25%,#cdd7e6 0 50%,#ff5f50 0 75%,#cdd7e6 0)'],
+    e: ['elettrone', 'width:6px;height:6px;background:#4fd2ff'],
+    ep: ['positrone (antielettrone)', 'width:6px;height:6px;background:none;border:2px solid #ff78d2'],
+    H: ['atomo di idrogeno', 'background:radial-gradient(#ff5f50 30%,transparent 38%);border:1px solid #4fd2ff'],
+    He: ['atomo di elio', 'background:radial-gradient(#ffaa96 30%,transparent 38%);border:1px solid #4fd2ff'],
+    f: ['fotone (luce)', 'width:12px;height:3px;border-radius:1px;background:#ffe9a0'],
+    uv: ['luce ultravioletta', 'width:12px;height:3px;border-radius:1px;background:#c882ff'],
+    nu: ['neutrino', 'width:5px;height:5px;background:#bbb'],
+    web: ['gas e materia oscura', 'width:6px;height:6px;border-radius:1px;background:#8296e6'],
+    gal: ['galassie', 'background:radial-gradient(#fff6e0,#9fb4ff 60%,transparent 70%)'],
+    st: ['prima stella', 'background:#cfe4ff;box-shadow:0 0 6px #8cf'],
+    sn: ['supernova', 'background:none;border:2px solid #ffb46e'],
+    bh: ['buco nero', 'background:#000;border:2px solid #ff963c'],
+    bub: ['gas ionizzato', 'background:#8c5fff'],
+    qso: ['quasar', 'background:#fff;box-shadow:0 0 6px #9cf']
+  };
   let dom = {};
   function sincronizzaParametri() {
     dom.vH0.textContent = P.H0.toFixed(1).replace('.', ','); dom.vOm.textContent = P.Om.toFixed(2).replace('.', ',');
@@ -381,8 +902,8 @@
     costruisciTacche();
   }
   function costruisciTacche() {
-    const n = nodi, tc = [['Big Bang', 1e-36], ['Inflazione', 1e-33], ['Quark', 1e-9], ['Protoni', n.quark * 3], ['Nuclei di elio', 200],
-      ['Prima luce', n.luce], ['Prime stelle', n.stelle], ['Galassie', n.picco]];
+    const n = nodi, tc = [['Big Bang', 1e-36], ['Inflazione', 1e-33], ['Quark', 1e-9], ['Protoni', n.quark * 3], ['Neutrini liberi', 1.5], ['Nuclei di elio', 300],
+      ['Primi atomi', n.luce], ['Prime stelle', n.pop[0].t], ['Reionizzazione', n.reion], ['Galassie e quasar', n.picco]];
     if (n.solare) tc.push(['Sistema solare', n.solare + 0.1 * GA]);
     if (tab.t0) tc.push(['Oggi', tab.t0]);
     if (n.svolta) tc.push(['Svolta', n.svolta]);
@@ -420,8 +941,8 @@
         dom.destino, el('p.nota', { testo: 'Crescita delle dimensioni dell\'universo nel tempo:' }), Uni.cScala,
         spunta('Lo zoom segue l\'espansione (coordinate comoventi)', 'comovente'),
         spunta('Frecce della legge di Hubble', 'hubble')));
-    dom.titolo = el('h3'); dom.testo = el('p'); dom.dati = el('div.uni-dati');
-    const epocaP = el('aside.pannello.uni-epoca', {}, el('div.corpo', { style: 'padding-top:10px' }, dom.titolo, dom.testo, dom.dati));
+    dom.titolo = el('h3'); dom.testo = el('p'); dom.dati = el('div.uni-dati'); dom.legenda = el('div.uni-legenda');
+    const epocaP = dom.epoca = el('aside.pannello.uni-epoca', {}, el('div.corpo', { style: 'padding-top:10px' }, dom.titolo, dom.testo, dom.legenda, dom.dati));
     dom.bGioca = el('button.primario', { title: 'Avvia / pausa', onclick: () => { if (Uni.u >= 0.999 && Uni.verso > 0) Uni.u = 0; Uni.gioca = !Uni.gioca; aggiornaGioca(); } });
     dom.verso = el('div.interruttore', {}, el('button', { 'data-v': '-1', testo: '◀ indietro' }), el('button.attivo', { 'data-v': '1', testo: 'avanti ▶' }));
     dom.verso.addEventListener('click', e => {
@@ -434,13 +955,18 @@
     dom.tempo = el('span.tempo');
     dom.cursore = el('input', { type: 'range', min: 0, max: 10000, step: 1, 'aria-label': 'Tempo', oninput: () => { Uni.u = dom.cursore.value / 10000; Uni.gioca = false; aggiornaGioca(); } });
     dom.tacche = el('div.uni-tacche');
-    const linea = el('div.uni-linea', {},
+    const linea = dom.linea = el('div.uni-linea', {},
       el('div.uni-comandi', {}, dom.bGioca, dom.verso, dom.ritmo, el('span', { testo: 'Tempo dal Big Bang:' }), dom.tempo,
-        el('span.nota', { testo: 'Trascina il cursore o clicca un\'epoca. All\'inizio la scala è logaritmica: ogni tratto è 10 volte più lungo del precedente.' })),
+        el('span.nota', { testo: 'Trascina il cursore o clicca un\'epoca. La scala del tempo non è uniforme: fino a 100 milioni di anni è logaritmica e le epoche ricche di eventi hanno più spazio.' })),
       el('div.uni-cursore', {}, dom.cursore, dom.tacche));
     box.append(canvas, pannello, epocaP, linea);
     if (window.ResizeObserver) new ResizeObserver(() => Uni.ridimensiona()).observe(canvas);
+    canvas.addEventListener('click', e => {
+      const L = Uni.lente, r = canvas.getBoundingClientRect();
+      if (L && Math.hypot(e.clientX - r.left - L.x, e.clientY - r.top - L.y) < L.r) Uni.lenteGrande = !Uni.lenteGrande;
+    });
     campo = creaCampo();
+    micro = creaMicro();
     calcola();
     sincronizzaParametri();
     costruisciTacche();
@@ -468,18 +994,18 @@
     else memoria.scrivi('universo:u', Uni.u);
   };
   Uni.aiuto = function () {
-    Grav.ui.avviso('Universo dal Big Bang', 'Muovi il cursore del tempo o premi ▶ (anche all\'indietro). A sinistra cambi gli "ingredienti": più materia porta al Big Crunch, un\'energia oscura con w < −1 al Big Rip. Ogni puntino è una regione grande come un ammasso di galassie; le più dense si accendono quando nascono le stelle. È un modello semplificato, ma i tempi e le temperature sono quelli calcolati con le equazioni della cosmologia.', 25);
+    Grav.ui.avviso('Universo dal Big Bang', 'Muovi il cursore del tempo o premi ▶ (anche all\'indietro). A sinistra cambi gli "ingredienti": più materia porta al Big Crunch, un\'energia oscura con w < −1 al Big Rip. All\'inizio vedi le particelle "al microscopio": quark, protoni, elettroni, luce, i primi nuclei e i primi atomi. Dopo la prima luce la vista si allarga sulla ragnatela cosmica e le particelle restano in una lente (clic sulla lente per ingrandirla), dove più tardi si formano la Via Lattea e Andromeda. Ogni puntino della ragnatela è una regione grande come un ammasso di galassie. È un modello semplificato, ma i tempi e le temperature sono quelli calcolati con le equazioni della cosmologia.', 25);
   };
 
   let attesaTesto = 0;
   Uni.frame = function (dt) {
     if (!ctx) { Uni.ridimensiona(); if (!ctx) return; }
     if (Uni.gioca) {
-      Uni.u += Uni.verso * dt * 0.018 * Uni.ritmo;
+      Uni.u += Uni.verso * dt * 0.014 * Uni.ritmo;
       if (Uni.u >= 1) { Uni.u = 1; Uni.gioca = false; aggiornaGioca(); }
       if (Uni.u <= 0) { Uni.u = 0; Uni.gioca = false; aggiornaGioca(); }
     }
-    const s = disegna();
+    const s = disegna(Math.min(dt, 0.05));
     if (document.activeElement !== dom.cursore) dom.cursore.value = Math.round(Uni.u * 10000);
     dom.tempo.textContent = tempoCosmico(s.t);
     if ((attesaTesto -= dt) <= 0) {
@@ -494,6 +1020,16 @@
         ['Spostamento verso il rosso z', s.a <= 1 ? fmt.numero(s.z < 1e-3 ? 0 : s.z, 3) : '— (futuro)'],
         ['Ritmo di espansione H', fmt.numero(hh, 3) + ' km/s/Mpc']
       ];
+      const C = s.C, pc = x => Math.round(100 * x) + '%';
+      if (C.L > 8.6 && C.L < 10.8) voci.push(['Neutroni ogni 100 protoni', String(Math.round(100 * C.nfr / (1 - C.nfr)))]);
+      if (s.T < 1.2e9 && s.T > 1500) voci.push(['Elio (in massa)', pc(0.25 * liscio(lin(C.nuc, 0.45, 1)))]);
+      if (s.T < 2e4 && s.T > 1000) voci.push(['Elettroni liberi', pc(micro.xe)]);
+      if (s.z < 25 && s.z > 2.5 && s.T < 1000) voci.push(['Idrogeno ionizzato tra le galassie', pc(C.reion)]);
+      const chiavi = [...new Set(s.leg)].filter(k => LEGENDA[k]);
+      if (chiavi.join() !== dom.legenda.dataset.k) {
+        dom.legenda.dataset.k = chiavi.join();
+        dom.legenda.replaceChildren(...chiavi.map(k => el('span', {}, el('i', { style: LEGENDA[k][1] }), LEGENDA[k][0])));
+      }
       dom.dati.replaceChildren(...voci.flatMap(([k, v]) => [el('span', { testo: k }), el('span', { testo: v })]));
       disegnaScala(s.t);
     }

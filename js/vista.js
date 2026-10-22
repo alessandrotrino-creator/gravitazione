@@ -326,8 +326,36 @@
     const g = ctx.createRadialGradient(x + lx * rc * 0.45, y + ly * rc * 0.45, rc * 0.05, x, y, rc * 1.15);
     g.addColorStop(0, mescola(b.colore, '#ffffff', 0.35)); g.addColorStop(0.55, b.colore); g.addColorStop(1, mescola(b.colore, '#000000', sorg ? 0.8 : 0.4));
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rc, 0, 7); ctx.fill();
+    if (V.opz.effetti) disegnaSegni(ctx, b, x, y, rc);
     if (b.tipo === 'pallone') disegnaCuciture(ctx, b, x, y, rc);
     if (b.anelli) disegnaAnelli(ctx, b, x, y, rc, k, 'davanti');
+  }
+
+  // Segni lasciati dagli impatti: macchie scure sui giganti gassosi (ruotano con il pianeta),
+  // polvere che oscura il cielo, superficie fusa incandescente
+  function disegnaSegni(ctx, b, x, y, rc) {
+    if (b.macchie && rc > 3) {
+      ctx.save(); ctx.beginPath(); ctx.arc(x, y, rc, 0, 7); ctx.clip();
+      const giro = 2 * Math.PI / (9.93 * 3600);                       // Giove ruota in meno di 10 ore
+      for (const m of b.macchie) {
+        const a = -(m.ang + giro * (S.t - m.t)), d = rc * m.d, f = Math.min(1, (S.t - m.t) / 1800);
+        ctx.fillStyle = `rgba(40,22,12,${0.75 * Math.max(0.3, f)})`;
+        ctx.beginPath(); ctx.ellipse(x + Math.cos(a) * d, y + Math.sin(a) * d, rc * (0.05 + 0.07 * f), rc * (0.03 + 0.05 * f), a, 0, 7); ctx.fill();
+      }
+      ctx.restore();
+    }
+    if (b.polvere > 0.01) {
+      ctx.fillStyle = `rgba(70,60,52,${0.7 * Math.min(1, b.polvere * 1.5)})`;
+      ctx.beginPath(); ctx.arc(x, y, rc * 1.04, 0, 7); ctx.fill();
+    }
+    if (b.calore > 0.01) {
+      const c = b.calore;
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(x, y, rc * 0.2, x, y, rc * (1.6 + c));
+      g.addColorStop(0, `rgba(255,${120 + 80 * c | 0},40,${0.75 * c})`); g.addColorStop(0.55, `rgba(255,90,20,${0.5 * c})`); g.addColorStop(1, 'rgba(255,60,10,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rc * (1.6 + c), 0, 7); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    }
   }
 
   // Le linee nere del pallone da basket: due diametri a croce e due archi laterali
@@ -370,12 +398,31 @@
     if (!s || !V.proietta(s.x, s.y, s.z, Q)) return;
     const d = Math.hypot(s.x - b.x, s.y - b.y, s.z - b.z);
     if (d > 6 * U.UA) return;
-    const l = Math.min(140, 18 + 50 * U.UA / d), dx = x - Q.x, dy = y - Q.y, n = Math.hypot(dx, dy) || 1, ux = dx / n, uy = dy / n;
-    const g = ctx.createLinearGradient(x, y, x + ux * l, y + uy * l);
-    g.addColorStop(0, 'rgba(200,240,255,0.7)'); g.addColorStop(1, 'rgba(200,240,255,0)');
-    ctx.fillStyle = g; ctx.beginPath();
-    ctx.moveTo(x - uy * rc, y + ux * rc); ctx.lineTo(x + ux * l - uy * l * 0.18, y + uy * l + ux * l * 0.18); ctx.lineTo(x + ux * l + uy * l * 0.18, y + uy * l - ux * l * 0.18); ctx.lineTo(x + uy * rc, y - ux * rc);
-    ctx.fill();
+    const l = Math.min(160, 18 + 50 * U.UA / d), dx = x - Q.x, dy = y - Q.y, n = Math.hypot(dx, dy) || 1, ux = dx / n, uy = dy / n;
+    // due code: quella di gas (ioni) azzurra e dritta, in direzione opposta al Sole; quella di polveri giallina,
+    // più larga e incurvata, perché i granelli restano indietro lungo l'orbita
+    let wx = 0, wy = 0;
+    if (V.proietta(b.x + (b.vx - s.vx) * 3600, b.y + (b.vy - s.vy) * 3600, b.z + (b.vz - s.vz) * 3600, P)) {
+      wx = P.x - x; wy = P.y - y; const w = Math.hypot(wx, wy) || 1; wx /= w; wy /= w;
+    }
+    const coda = (vx, vy, lung, larg, col, a) => {
+      const g = ctx.createLinearGradient(x, y, x + vx * lung, y + vy * lung);
+      g.addColorStop(0, `rgba(${col},${a})`); g.addColorStop(1, `rgba(${col},0)`);
+      ctx.fillStyle = g; ctx.beginPath();
+      ctx.moveTo(x - vy * rc, y + vx * rc);
+      ctx.quadraticCurveTo(x + vx * lung * 0.5 - vy * lung * larg * 0.6, y + vy * lung * 0.5 + vx * lung * larg * 0.6, x + vx * lung - vy * lung * larg, y + vy * lung + vx * lung * larg);
+      ctx.lineTo(x + vx * lung + vy * lung * larg, y + vy * lung - vx * lung * larg);
+      ctx.quadraticCurveTo(x + vx * lung * 0.5 + vy * lung * larg * 0.6, y + vy * lung * 0.5 - vx * lung * larg * 0.6, x + vy * rc, y - vx * rc);
+      ctx.fill();
+    };
+    let px = ux - wx * 0.45, py = uy - wy * 0.45; const pn = Math.hypot(px, py) || 1; px /= pn; py /= pn;
+    ctx.globalCompositeOperation = 'lighter';
+    coda(px, py, l * 0.8, 0.22, '255,236,190', 0.45);
+    coda(ux, uy, l, 0.07, '150,200,255', 0.75);
+    const ch = ctx.createRadialGradient(x, y, 0, x, y, rc + 10 + l * 0.08);                 // la chioma
+    ch.addColorStop(0, 'rgba(220,245,255,0.8)'); ch.addColorStop(1, 'rgba(200,240,255,0)');
+    ctx.fillStyle = ch; ctx.beginPath(); ctx.arc(x, y, rc + 10 + l * 0.08, 0, 7); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   function disegnaAnelli(ctx, b, x, y, rc, k, parte) {
@@ -493,7 +540,7 @@
   /* ---------- Effetti ---------- */
   V.aggiungiEffetti = function (ev) {
     const lista = V.opz.effetti ? ev.effetti || [] : (ev.effetti || []).slice(0, 1);
-    for (const e of lista) V.effetti.push(Object.assign({ x: ev.x, y: ev.y, z: ev.z, t: 0 }, e));
+    for (const e of lista) V.effetti.push(Object.assign({ x: ev.x, y: ev.y, z: ev.z }, e, { t: -(e.ritardo || 0) }));
     if (V.opz.effetti && ev.scossa) V.scossa = Math.max(V.scossa, ev.scossa);
   };
   function disegnaEffetti(ctx, dt) {
@@ -503,9 +550,18 @@
       e.t += dt;
       const f = e.t / e.durata;
       if (f >= 1) { V.effetti.splice(i, 1); continue; }
-      if (!V.proietta(e.x, e.y, e.z, P)) continue;
+      if (f < 0 || !V.proietta(e.x, e.y, e.z, P)) continue;      // f < 0: effetto in ritardo, non ancora partito
       const x = P.x, y = P.y;
-      if (e.tipo === 'lampo') {
+      if (e.tipo === 'implosione') {                            // il nucleo che collassa: un anello che si stringe
+        const r = e.raggio * (1 - f) ** 1.5 + 2;
+        ctx.strokeStyle = rgba(e.colore, 0.9 * f + 0.1); ctx.lineWidth = 1 + 3 * f;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
+      } else if (e.tipo === 'neutrini') {                       // il lampo di neutrini: un guscio di puntini velocissimo
+        const r = e.raggio * f, n = 90;
+        ctx.fillStyle = rgba(e.colore, 0.9 * (1 - f));
+        for (let j = 0; j < n; j++) { const a = j / n * 2 * Math.PI + (j % 3) * 0.02, rr = r * (0.94 + 0.06 * ((j * 7) % 5) / 4); ctx.fillRect(x + Math.cos(a) * rr - 1, y + Math.sin(a) * rr - 1, 2, 2); }
+        if (f < 0.6) { ctx.font = '11px system-ui, sans-serif'; ctx.fillText('neutrini', x + r * 0.71 + 4, y - r * 0.71 - 4); }
+      } else if (e.tipo === 'lampo') {
         const r = e.raggio * (0.25 + 0.75 * Math.sqrt(f)), a = (1 - f) * (1 - f);
         const g = ctx.createRadialGradient(x, y, 0, x, y, r);
         g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(0.25, rgba(e.colore, a * 0.8)); g.addColorStop(1, rgba(e.colore, 0));

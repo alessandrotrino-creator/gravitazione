@@ -198,7 +198,11 @@
       P[i].vita -= dtReale;
       if (P[i].vita <= 0) { P[i] = P[P.length - 1]; P.pop(); }
     }
-    for (const b of S.corpi) if (b.bagliore) b.bagliore = Math.max(0, b.bagliore - dtReale * 0.15);
+    for (const b of S.corpi) {
+      if (b.bagliore) b.bagliore = Math.max(0, b.bagliore - dtReale * 0.15);
+      if (b.calore) b.calore = Math.max(0, b.calore - dtReale * 0.035);       // la superficie fusa si raffredda
+      if (b.polvere) b.polvere = Math.max(0, b.polvere - dtReale * 0.02);     // la polvere ricade
+    }
   };
 
   /* ---------- Gestione dei corpi ---------- */
@@ -278,9 +282,10 @@
       unisci(big, small, perdita);
       big.m -= ej;
       S.emetti({ x: big.x, y: big.y, z: big.z, vx: big.vx, vy: big.vy, vz: big.vz, n: 450, r0: big.r * 3, vmin: 0.08 * C, vmax: 0.3 * C, colori: ['#ffd36b', '#ff9a3c', '#ff5d5d', '#fff1c4'], vita: 6, dim: 1.7 });
-      let testo = `Le due stelle di neutroni si fondono. L'esplosione (kilonova) scaglia via ${fmt.massa(ej)} di materia ricchissima di elementi pesanti: gran parte dell'oro e del platino dell'universo nasce così.`;
+      let testo = `Le due stelle di neutroni si fondono. L'esplosione (kilonova) scaglia via ${fmt.massa(ej)} di materia ricchissima di elementi pesanti: probabilmente buona parte dell'oro e del platino dell'universo nasce così. È più debole e rapida di una supernova (grafico "Luce"): la alimentano i nuclei radioattivi appena formati.`;
       if (big.m > K.MAX_NEUTRONI) { big.tipo = 'buco'; big.colore = '#000000'; big.luce = undefined; testo += ' La massa supera il limite delle stelle di neutroni: nasce un buco nero.'; }
       K.adatta(big);
+      S.esplosione = { tipo: 'kilonova', t0: S.t, nome: big.nome };
       ev({ titolo: 'Kilonova!', testo, effetti: [LAMPO('#fff3c9', 220, 2.5), ANELLO('#ffb347', 380, 2.5), ONDE(6, 600, 4)], scossa: 1, sopravvissuto: big.id });
       if (rel) avviaRingdown(big.m);
       return;
@@ -314,7 +319,7 @@
     if (entrambi('galassia')) {
       const nomeNuovo = big.nome + ' + ' + small.nome;
       unisci(big, small); big.r = Math.cbrt(big.r ** 3 + small.r ** 3); big.nome = nomeNuovo;
-      ev({ titolo: 'Fusione di galassie', testo: 'Le stelle non si scontrano quasi mai: sono separate da distanze enormi. I due nuclei si fondono e il risultato, dopo centinaia di milioni di anni, è una grande galassia ellittica. Tra circa 5 miliardi di anni toccherà alla Via Lattea e ad Andromeda.', effetti: [LAMPO('#fff1d0', 120, 2)], scossa: 0.4, sopravvissuto: big.id });
+      ev({ titolo: 'Fusione di galassie', testo: 'Le stelle non si scontrano quasi mai: sono separate da distanze enormi. I due nuclei si fondono e il risultato, dopo centinaia di milioni di anni, è una grande galassia ellittica. Fra qualche miliardo di anni potrebbe toccare alla Via Lattea e ad Andromeda.', effetti: [LAMPO('#fff1d0', 120, 2)], scossa: 0.4, sopravvissuto: big.id });
       return;
     }
 
@@ -332,8 +337,22 @@
     if (small.m > 1e-4 * big.m)
       S.emetti({ x: pos.x, y: pos.y, z: pos.z, vx: (a.m * a.vx + b.m * b.vx) / M, vy: (a.m * a.vy + b.m * b.vy) / M, vz: (a.m * a.vz + b.m * b.vz) / M,
         n: Math.round(40 + 160 * forza), r0: small.r, vmin: 0.1 * vfuga, vmax: 0.7 * vfuga, colori: [small.colore, big.colore, '#ffcf8a'], vita: 5, dim: 1.3 });
+    const angImpatto = Math.atan2(small.y - big.y, small.x - big.x);
     unisci(big, small);
     big.r = rN; K.adatta(big);
+    // segni dell'impatto: superficie incandescente, polvere nell'atmosfera, macchie scure sui giganti gassosi
+    if (!K.luce(big) && small.m > 1e-18 * big.m) {
+      if (rocciosi.includes(big.tipo) && small.m > 1e-12 * big.m) {
+        big.calore = Math.min(1, (big.calore || 0) + Math.max(0.15, forza * 1.4));
+        if (big.tipo === 'roccioso' && big.m > 1e24) big.polvere = 1;
+        // anche un impatto piccolo rispetto al pianeta solleva un pennacchio di rocce fuse che ricadono
+        if (small.m <= 1e-4 * big.m && small.r > 1e3)
+          S.emetti({ x: pos.x, y: pos.y, z: pos.z, vx: big.vx, vy: big.vy, vz: big.vz, n: 160, r0: small.r, vmin: 0.1 * vfuga, vmax: 0.6 * vfuga, colori: ['#ffcf8a', '#ff8a4c', '#9a8a7a'], vita: 25, dim: 1.6 });
+      } else if (big.tipo === 'gassoso') {
+        (big.macchie = big.macchie || []).push({ ang: angImpatto, t: S.t, d: 0.55 + 0.35 * Math.random() });
+        if (big.macchie.length > 24) big.macchie.shift();
+      }
+    }
     const stelle = t => t === 'stella' || t === 'gigante';
     let titolo, testo;
     if (stelle(tipi[0]) && stelle(tipi[1])) { titolo = 'Fusione di due stelle'; testo = 'Le due stelle diventano una sola, più massiccia e più calda: gli astronomi chiamano "vagabonde blu" le stelle nate così.'; }
@@ -348,7 +367,8 @@
       if (nuovo) ev({ titolo: 'I frammenti si riuniscono', testo: 'Due frammenti in orbita si scontrano piano e si uniscono in un corpo più grande, la "Proto-Luna". Urto dopo urto, secondo l\'ipotesi dell\'impatto gigante, il disco di detriti formò la Luna in pochi anni.', effetti: [LAMPO('#ffd59a', 40, 1)], scossa: 0.1, sopravvissuto: big.id });
       else ev({ effetti: [LAMPO('#ffd59a', 25, 0.7)], sopravvissuto: big.id });
     } else if (tipi[0] === 'frammento' && !(st && !st.usata)) {
-      ev({ effetti: [LAMPO('#ffd59a', 35, 0.8)], sopravvissuto: big.id });   // niente avviso per ogni frammento
+      // niente avviso per ogni frammento; sui giganti gassosi una palla di fuoco più grande
+      ev({ effetti: big.tipo === 'gassoso' ? [LAMPO('#fff0c8', 70, 1.4), ANELLO('#ffb070', 90, 1.4)] : [LAMPO('#ffd59a', 35, 0.8)], sopravvissuto: big.id });
     } else if (st && !st.usata) {
       st.usata = true;
       ev({ titolo: st.titolo, testo: `${st.testo} Velocità d'impatto ${fmt.velocita(vrel)}, energia liberata circa ${fmt.numero(Eimp)} J (${fmt.numero(Eimp / 4.184e15)} megatoni di tritolo).`, effetti: [LAMPO('#ffe2b0', 150, 2.2), ANELLO('#ff9a4c', 220, 2)], scossa: 0.8, sopravvissuto: big.id });
@@ -420,6 +440,7 @@
     S.emetti({ x: cx, y: cy, z: cz, vx: nucleo.vx, vy: nucleo.vy, vz: nucleo.vz, n: 220, r0: nucleo.r, vmin: 0.3 * vfuga, vmax: 0.9 * vfuga, colori: ['#ffcf8a', '#ff8a4c', small.colore, big.colore], vita: 8, dim: 1.3 });
     rimuovi(small);
     nuovi.forEach(S.aggiungi);
+    nucleo.calore = 1;
     evento({ x: cx, y: cy, z: cz, titolo: 'Impatto gigante!', testo: 'L\'urto è così violento che parte del materiale viene scagliata in orbita. Si pensa che la Luna sia nata così, dallo scontro tra la Terra primordiale e un pianeta grande come Marte (Theia).', effetti: [LAMPO('#ffe2b0', 160, 2.2), ANELLO('#ff9a4c', 260, 2)], scossa: 0.9, sopravvissuto: nucleo.id });
   }
 
@@ -440,10 +461,32 @@
   }
 
   /* ---------- Evoluzione stellare ---------- */
+  // Gli strati dell'esplosione, come una cipolla: i più esterni sono i più veloci.
+  // Colori: idrogeno rosso (riga H-alfa), elio/ossigeno verde-azzurro, silicio/zolfo giallo, ferro/nichel bianco-azzurro.
+  const STRATI_II = [
+    { colori: ['#ff4f6d', '#ff8a9a'], v: [6e6, 1e7], n: 300 },
+    { colori: ['#7cf2c8', '#9ad0ff'], v: [3.5e6, 6e6], n: 220 },
+    { colori: ['#ffd27a', '#ffb347'], v: [2e6, 3.5e6], n: 140 },
+    { colori: ['#e8eeff', '#b8c8ff'], v: [8e5, 2e6], n: 110 }
+  ];
+  const STRATI_IA = [
+    { colori: ['#9ad0ff', '#7cf2c8'], v: [1.2e7, 2e7], n: 220 },
+    { colori: ['#ffd27a', '#fff3c4'], v: [8e6, 1.2e7], n: 250 },
+    { colori: ['#ffffff', '#c9d6ff'], v: [3e6, 8e6], n: 200 }
+  ];
+  function emettiStrati(b, r0, strati, vita) {
+    for (const s of strati) S.emetti({ x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, n: s.n, r0, vmin: s.v[0], vmax: s.v[1], colori: s.colori, vita, dim: 2.2 });
+  }
+  // prima dell'esplosione: il nucleo collassa (anello che si stringe), poi parte il lampo di neutrini
+  const IMPLOSIONE = (raggio) => ({ tipo: 'implosione', colore: '#cfe6ff', raggio, durata: 0.45 });
+  const NEUTRINI = (raggio, ritardo) => ({ tipo: 'neutrini', colore: '#d8ffd0', raggio, durata: 1.6, ritardo });
+  const conRitardo = (e, r) => Object.assign(e, { ritardo: r });
+
   function supernovaIa(b) {
-    S.emetti({ x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, n: 650, r0: b.r * 3, vmin: 5e6, vmax: 2e7, colori: ['#ffffff', '#fff3c4', '#ffd27a', '#9ad0ff'], vita: 12, dim: 1.8 });
+    emettiStrati(b, b.r * 3, STRATI_IA, 22);
     rimuovi(b);
-    evento({ x: b.x, y: b.y, z: b.z, titolo: 'Supernova di tipo Ia!', testo: `${b.nome} ha superato il limite di Chandrasekhar (1,44 M☉) ed esplode completamente, senza lasciare resti. Queste supernove brillano sempre più o meno allo stesso modo: servono come "candele standard" per misurare le distanze tra le galassie.`, effetti: [LAMPO('#ffffff', 280, 3.2), ANELLO('#cfe6ff', 420, 3), ANELLO('#ffd27a', 300, 2.5)], scossa: 1 });
+    S.esplosione = { tipo: 'Ia', t0: S.t, nome: b.nome };
+    evento({ x: b.x, y: b.y, z: b.z, titolo: 'Supernova di tipo Ia!', testo: `${b.nome} ha superato il limite di Chandrasekhar (1,44 M☉): il carbonio e l'ossigeno si accendono tutti insieme in una reazione nucleare a valanga e la stella esplode completamente, senza lasciare resti. Fuori restano carbonio e ossigeno (azzurro), poi silicio e zolfo (giallo), al centro ferro e nichel radioattivo (bianco): il decadimento del nichel-56 fa brillare la supernova per settimane (grafico "Luce"). Queste supernove raggiungono quasi tutte la stessa luminosità: servono come "candele standard" per misurare le distanze tra le galassie.`, effetti: [LAMPO('#ffffff', 280, 3.2), ANELLO('#cfe6ff', 420, 3), ANELLO('#ffd27a', 300, 2.5)], scossa: 1 });
   }
 
   S.supernova = function (b) {
@@ -455,8 +498,10 @@
     const resto = bh ? Math.max(3 * MS, 0.3 * m) : Math.min(2.0, 1.25 + 0.03 * (m / MS - 8)) * MS;
     b.tipo = bh ? 'buco' : 'neutroni'; b.m = resto; b.colore = TIPI[b.tipo].colore; b.coloreAuto = true; b.luce = undefined;
     b.nome = (bh ? 'Buco nero' : 'Pulsar') + ' (ex ' + vecchio + ')';
+    if (!bh) b.r = 12e3;                              // una stella di neutroni è larga una ventina di km
     K.adatta(b);
-    S.emetti({ x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, n: 750, r0, vmin: 3e6, vmax: 1e7, colori: ['#fff6d5', '#ffd27a', '#ff8a4c', '#ff5470', '#9ad0ff'], vita: 12, dim: 1.8 });
+    emettiStrati(b, r0, STRATI_II, 22);
+    S.esplosione = { tipo: 'II', t0: S.t, nome: vecchio };
     let spinta = '';
     if (S.opz.spinta) {
       const v = bh ? 3e4 * Math.random() : 1.5e5 + 3e5 * Math.random(), a = Math.random() * 2 * Math.PI;
@@ -465,7 +510,7 @@
       spinta = ` L'esplosione non è perfettamente simmetrica e dà al resto una spinta di ${fmt.velocita(v)}.`;
     }
     S.sporco = true;
-    evento({ x: b.x, y: b.y, z: b.z, titolo: 'Supernova!', testo: `${vecchio} ha esaurito il combustibile: il nucleo collassa e gli strati esterni vengono scagliati via a migliaia di km/s. Si disperdono ${fmt.massa(m - resto)} di materia; resta ${bh ? 'un buco nero' : 'una stella di neutroni'} di ${fmt.massa(resto)}.${spinta} Con meno massa al centro, i corpi in orbita possono essere liberati.`, effetti: [LAMPO('#ffffff', 300, 3.5), ANELLO('#fff3c4', 450, 3), ANELLO('#ff8a4c', 320, 2.6)], scossa: 1, sopravvissuto: b.id });
+    evento({ x: b.x, y: b.y, z: b.z, titolo: 'Supernova!', testo: `${vecchio} ha un nucleo di ferro, da cui non si ricava più energia: in meno di un secondo collassa da migliaia di km a pochi km. Il 99% dell'energia esce in un lampo di neutrini (dalla supernova SN 1987A ne furono rivelati circa 25, ore prima della luce); il resto scaglia via gli strati della stella a migliaia di km/s, come una cipolla che si apre: idrogeno fuori (rosso), poi elio e ossigeno, silicio, e ferro al centro. Si disperdono ${fmt.massa(m - resto)}; resta ${bh ? 'un buco nero' : 'una stella di neutroni'} di ${fmt.massa(resto)}.${spinta} Con meno massa al centro, i corpi in orbita possono essere liberati. Guarda il grafico "Luce".`, effetti: [IMPLOSIONE(70), NEUTRINI(700, 0.35), conRitardo(LAMPO('#ffffff', 300, 3.5), 0.4), conRitardo(ANELLO('#fff3c4', 450, 3), 0.45), conRitardo(ANELLO('#ff8a4c', 320, 2.6), 0.5)], scossa: 1, sopravvissuto: b.id });
     return null;
   };
 

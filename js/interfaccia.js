@@ -90,7 +90,7 @@
     const descr = sc.descrizione + (con ? ' ' + sc.opzione.testo : '');
     UI.descrizioneAttuale = descr;
     const r = sc.costruisci(con);
-    S.corpi = r.corpi; S.particelle = r.particelle || []; S.t = 0; S.sporco = true; S.eventi = [];
+    S.corpi = r.corpi; S.particelle = r.particelle || []; S.t = 0; S.sporco = true; S.eventi = []; S.esplosione = null;
     Object.assign(S.gw, { campioni: [], rd: null, coppia: null, ultimo: 0 });
     imposta('gModo', S.modo);
     const o = sc.opz || {};
@@ -405,6 +405,8 @@
       }
       [['cinetica', '#ffb347'], ['potenziale', '#6fa8ff'], ['totale', '#ffffff']].forEach(([t, c], i) => { ctx.fillStyle = c; ctx.fillText(t, 6 + i * 70, 12); });
       nota.textContent = 'Energia del sistema nel tempo. Cinetica = movimento, potenziale = legame gravitazionale (negativa). Negli urti parte dell\'energia si trasforma in calore.';
+    } else if (UI.grafico === 'luce') {
+      disegnaCurvaLuce(ctx, W, H, nota);
     } else {
       if (!S.rel()) { nota.textContent = 'Le onde gravitazionali compaiono in modalità relativistica: prova lo scenario "Fusione di due buchi neri".'; return; }
       const C = S.gw.campioni;
@@ -417,6 +419,37 @@
       ctx.fillStyle = '#b9a4ff'; ctx.fillText('deformazione dello spazio (scala automatica)', 6, 12);
       nota.textContent = 'Ogni giro della coppia produce due oscillazioni. Avvicinandosi, le onde diventano più rapide e più forti ("chirp"); dopo la fusione si smorzano.';
     }
+  }
+
+  // Curve di luce tipiche (luminosità in Soli, scala logaritmica, tempo in giorni dall'esplosione).
+  // Tipo II-P: picco, "plateau" di circa 100 giorni (l'idrogeno degli strati esterni si ricombina), poi la coda
+  // del cobalto-56 (vita media 111 giorni). Tipo Ia: picco dopo circa 19 giorni alimentato dal nichel-56.
+  // Kilonova: più debole e velocissima, alimentata dai nuclei pesanti radioattivi del processo r.
+  const CURVE = {
+    II: { giorni: 300, nome: 'supernova di tipo II', logL: d => d < 5 ? 7 + 2 * Math.sqrt(d / 5) : d < 15 ? 9 - 0.05 * (d - 5) : d < 100 ? 8.5 - 0.002 * (d - 15) : d < 125 ? 8.33 - 0.03 * (d - 100) : 7.58 - 0.0039 * (d - 125),
+      nota: 'Prima un picco, poi il "plateau": per circa 100 giorni l\'idrogeno degli strati esterni torna neutro e rilascia la luce piano piano. Poi la luce cala lentamente: la alimenta il cobalto-56 radioattivo che diventa ferro (vita media 111 giorni).' },
+    Ia: { giorni: 200, nome: 'supernova di tipo Ia', logL: d => d < 19 ? 9.4 - 2.6 * (1 - d / 19) ** 2 : d < 40 ? 9.4 - 0.03 * (d - 19) : 8.77 - 0.0056 * (d - 40),
+      nota: 'Il picco arriva dopo circa 3 settimane: miliardi di Soli, tanto quanto un\'intera galassia. La luce viene dal nichel-56 che decade in cobalto-56 e poi in ferro. Le supernove Ia raggiungono quasi tutte lo stesso picco: per questo misurano le distanze cosmiche.' },
+    kilonova: { giorni: 15, nome: 'kilonova', logL: d => d < 1 ? 6.5 + 0.9 * d : 7.4 - 0.12 * (d - 1),
+      nota: 'Mille volte più debole di una supernova e brevissima: in pochi giorni diventa rossa e si spegne. La alimentano i nuclei pesanti appena nati (oro, platino, terre rare), che decadono.' }
+  };
+  function disegnaCurvaLuce(ctx, W, H, nota) {
+    const e = S.esplosione, c = e && CURVE[e.tipo];
+    if (!c || S.t < e.t0) { nota.textContent = 'Qui compare la curva di luce delle esplosioni: fai esplodere una stella come supernova o prova gli scenari "Supernova" e "Kilonova".'; return; }
+    const L0 = 6, L1 = 10, x = d => 6 + d / c.giorni * (W - 12), y = l => H - 14 - (l - L0) / (L1 - L0) * (H - 28);
+    ctx.fillStyle = 'rgba(200,210,255,0.55)';
+    for (const [l, s] of [[7, '10 milioni di Soli'], [8, '100 milioni'], [9, '1 miliardo']]) {
+      ctx.strokeStyle = 'rgba(150,170,255,0.15)'; ctx.beginPath(); ctx.moveTo(0, y(l)); ctx.lineTo(W, y(l)); ctx.stroke();
+      ctx.fillText(s, W - ctx.measureText(s).width - 4, y(l) - 2);
+    }
+    ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 1.6; ctx.beginPath();
+    for (let i = 0; i <= 150; i++) { const d = i / 150 * c.giorni, l = Math.max(L0, c.logL(d)); if (i) ctx.lineTo(x(d), y(l)); else ctx.moveTo(x(d), y(l)); }
+    ctx.stroke();
+    const g = (S.t - e.t0) / U.GIORNO, d = Math.min(g, c.giorni), l = Math.max(L0, c.logL(d));
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x(d), y(l), 4, 0, 7); ctx.fill();
+    ctx.fillStyle = '#ffd27a'; ctx.fillText(`${c.nome}: luminosità (scala logaritmica)`, 6, 12);
+    ctx.fillStyle = 'rgba(200,210,255,0.7)'; ctx.fillText(`giorno ${fmt.numero(g, 2)}${g > c.giorni ? ' (fuori scala)' : ''}`, 6, H - 3);
+    nota.textContent = c.nota;
   }
 
   /* ---------- Mouse e tocco ---------- */
@@ -707,16 +740,41 @@
     Grav.universo.attiva(s === 'universo');
   };
 
+  // Il "cinguettio" (chirp) delle onde gravitazionali trasformato in suono, come fecero i ricercatori di LIGO:
+  // la frequenza sale sempre più in fretta fino alla fusione, poi l'onda si smorza (qui rallentato a circa un secondo)
+  let audio = null;
+  function cinguettio(alto) {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audio.currentTime + 0.05, o = audio.createOscillator(), g = audio.createGain(), f1 = alto ? 900 : 300;
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f1 / 8, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + 1.2); o.frequency.exponentialRampToValueAtTime(f1 * 0.85, t0 + 1.5);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.22, t0 + 1.15); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.55);
+      o.connect(g); g.connect(audio.destination); o.start(t0); o.stop(t0 + 1.6);
+    } catch (e) { /* audio non disponibile */ }
+  }
+
   /* ---------- Aggiornamento a ogni fotogramma ---------- */
   let attesaPannello = 0, attesaEnergia = 0, faseOnde = 0, ultimaOnda = 0, angoloOnde = null;
   UI.tick = function (dt) {
     for (const ev of S.eventi) {
       V.aggiungiEffetti(ev);
       if (ev.titolo) { UI.avviso(ev.titolo, ev.testo, 12); annota(ev.titolo, ev.testo); }
+      if (S.rel() && V.opz.effetti && (ev.titolo === 'Fusione di buchi neri' || ev.titolo === 'Kilonova!')) cinguettio(ev.titolo === 'Kilonova!');
       if (V.selezionato && !S.trova(V.selezionato) && ev.sopravvissuto) UI.seleziona(S.trova(ev.sopravvissuto) || null);
       if (V.seguito && !S.trova(V.seguito)) V.seguito = ev.sopravvissuto || null;
     }
     S.eventi.length = 0;
+    if (S.esplosione && S.esplosione !== UI.esplosioneVista) {
+      UI.esplosioneVista = S.esplosione; UI.grafico = 'luce'; imposta('gGrafico', 'luce');
+      // rallentatore: i detriti devono metterci qualche secondo ad attraversare la vista, altrimenti si vede solo un lampo
+      const largo = V.tipo === '2d' ? V.W / V.cam2.s : 2 * V.cam3.dist * Math.tan(V.cam3.fov / 2) * V.W / V.H;
+      const v = { II: 6e6, Ia: 1.2e7, kilonova: 6e7 }[S.esplosione.tipo] || 6e6, ritmo = largo / 2 / (v * 6);
+      if (VELOCITA[UI.velIndice] > 1.5 * ritmo) {
+        UI.impostaVel(UI.velIndiceVicino(ritmo));
+        UI.avviso('Rallentatore', `Il tempo ora scorre a ${etichettaVel(UI.velIndice)}: così si vedono gli strati della stella che si allontanano. Puoi cambiare la velocità in basso.`, 8);
+      }
+    }
     // azioni programmate degli scenari storici (es. l'esplosione di una supernova a un certo istante)
     // (con "t" scattano a un istante preciso, con "quando" appena una condizione diventa vera)
     const trova = nome => S.corpi.find(b => b.nome === nome);
